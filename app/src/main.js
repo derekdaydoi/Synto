@@ -69,8 +69,16 @@ async function start() {
   ta.addEventListener('input', (e) => app.onTextInput(e));
   ta.addEventListener('keydown', (e) => {
     e.stopPropagation();
-    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); app.finishTextEdit(); }
-    else if (e.key === 'Tab') { e.preventDefault(); if (!document.execCommand('insertText', false, '    ')) ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end'); app.onTextInput(); }
+    if (e.isComposing) return; // IME composition (e.g. Vietnamese input methods) owns these keys
+    const shape = app.editingShape;
+    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); app.finishTextEdit(); return; }
+    if (shape) {
+      // Label inside a shape / mind-map topic: Enter = done (Shift+Enter = new line), Tab = done + child.
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); app.finishTextEdit(); return; }
+      if (e.key === 'Tab') { e.preventDefault(); const node = shape; app.finishTextEdit(); app.addChildTopic(app.byId(node.id)); return; }
+      return;
+    }
+    if (e.key === 'Tab') { e.preventDefault(); if (!document.execCommand('insertText', false, '    ')) ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end'); app.onTextInput(); }
   });
   ta.addEventListener('blur', () => {
     // Defer: focus may come right back (e.g. inserting a symbol from the palette).
@@ -80,7 +88,17 @@ async function start() {
   // ----- keyboard -----
   window.addEventListener('keydown', (e) => onKey(e, app, ui));
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') { app.spaceDown = false; app.updateCursor(); }
+    if (e.code === 'Space') {
+      app.spaceDown = false;
+      app.updateCursor();
+      // A quick tap of Space (no drag) on a selected topic adds a sibling; holding + dragging pans.
+      const tap = app.spaceTap;
+      app.spaceTap = null;
+      if (tap && !tap.panned && performance.now() - tap.t < 500 && !isTextField(e.target) && !app.root.querySelector('.dialog')) {
+        const node = app.mindmapNode;
+        if (node && node.id === tap.id) app.addSiblingTopic(node);
+      }
+    }
     if (e.key === 'Alt') app.altDown = false;
   });
   window.addEventListener('blur', () => { app.spaceDown = false; app.altDown = false; });
@@ -144,7 +162,29 @@ function onKey(e, app, ui) {
     return;
   }
   if (key === 'Enter' && app.lineDraft) { e.preventDefault(); app.finishLineDraft(false); return; }
-  if (code === 'Space' && !e.repeat) { app.spaceDown = true; app.updateCursor(); e.preventDefault(); return; }
+  if (code === 'Space') {
+    e.preventDefault();
+    if (!e.repeat) {
+      app.spaceDown = true;
+      app.updateCursor();
+      const node = app.mindmapNode;
+      app.spaceTap = node && !ctrl ? { id: node.id, t: performance.now(), panned: false } : null;
+    }
+    return;
+  }
+  // Mind map (XMind-style): Tab = child topic, Enter = sibling topic, F2 = edit the label.
+  if (key === 'Tab' && !ctrl && !e.altKey) {
+    e.preventDefault(); // never let Tab move focus off the canvas
+    const node = app.mindmapNode;
+    if (node) app.addChildTopic(node);
+    return;
+  }
+  if (key === 'Enter' && !ctrl && !e.altKey && !e.shiftKey && app.mindmapNode) { e.preventDefault(); app.addSiblingTopic(); return; }
+  if (key === 'F2') {
+    const sel = app.selected;
+    if (sel.length === 1 && (sel[0].type === 'shape' || sel[0].type === 'text')) { e.preventDefault(); app.startTextEdit(sel[0]); }
+    return;
+  }
   if (key === 'Alt') { app.altDown = true; e.preventDefault(); return; }
 
   if (ctrl) {
@@ -156,6 +196,7 @@ function onKey(e, app, ui) {
     if (key === 's') { handled(); app.saveToFile(); return; }
     if (key === 'o') { handled(); app.openFromFile(); return; }
     if (key === 'e' && e.shiftKey) { handled(); app.exportPng(); return; }
+    if (key === 'p' && !e.shiftKey) { handled(); app.exportPdf(); return; }
     if (key === '=' || key === '+') { handled(); app.zoomBy(1.2); return; }
     if (key === '-') { handled(); app.zoomBy(1 / 1.2); return; }
     if (key === '0') { handled(); app.resetZoom(); return; }
@@ -199,6 +240,7 @@ function onKey(e, app, ui) {
     case 'h': app.setTool('hand'); break;
     case 'p': app.setTool('pen', { penMode: e.shiftKey ? 'highlighter' : 'pen' }); break;
     case 't': app.setTool('text'); break;
+    case 'n': app.setTool('mindmap'); break;
     case 'm': app.setTool('math'); ui.openMathEditor(null, null); break;
     case 'e': app.setTool('eraser'); break;
     case 'k': app.setTool('laser'); break;

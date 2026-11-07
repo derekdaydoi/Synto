@@ -3,7 +3,7 @@
 import { clamp, debounce, newId, nfc, arrayBufferToBase64, base64ToArrayBuffer } from './util.js';
 import { dist, snapAngle, boundsContain, boundsOfPoints, rotate } from './geometry.js';
 import {
-  DEFAULT_STYLE, ROTATABLE, PDF, createElement, updateElement, withWorldPoints, worldPoints, withText,
+  DEFAULT_STYLE, ROTATABLE, PDF, createElement, updateElement, withWorldPoints, worldPoints, withText, withLabel, labelColor, LABEL_PAD,
   getBounds, hitTest, measureText, pdfLayout, pdfCurrentPage, sanitizeElement,
 } from './elements.js';
 import { DEFAULT_PARAMS, shapeNeedsSquare, SHAPES } from './shapelib.js';
@@ -12,6 +12,9 @@ import { History } from './history.js';
 import { Renderer, renderToCanvas, viewportBounds } from './renderer.js';
 import { selectionFrame, getHandles, hitHandle, resizeElement, scaleElement, groupScaleFactor, rotateAngle, moveLinePoint } from './transform.js';
 import { applyAutoReplace } from './textinput.js';
+import { reflowConnectors, dropDangling, remapReferences, bindingTargetAt, isBindable } from './connectors.js';
+import { centralTopic, addChild as addChildTopicTo, addSibling as addSiblingTopicTo } from './mindmap.js';
+import { canvasToPdf } from './pdfexport.js';
 import { renderMathImage, measureMath } from './mathrender.js';
 import { readPageSizes, getPageBitmap, setPageReadyCallback } from './pdfdoc.js';
 import * as store from './storage.js';
@@ -22,7 +25,7 @@ const SNAP_RADIUS = 12; // screen px
 const IMAGE_MIME = /^image\/(png|jpeg|gif|webp|svg\+xml)$/;
 const LASER_LIFE = 900; // ms a laser trail point stays visible
 
-export const TOOLS = ['hand', 'select', 'shape', 'line', 'pen', 'text', 'math', 'eraser', 'laser'];
+export const TOOLS = ['hand', 'select', 'shape', 'line', 'pen', 'text', 'mindmap', 'math', 'eraser', 'laser'];
 
 export class App {
   constructor(root) {
@@ -94,8 +97,15 @@ export class App {
     this.emit('elements');
   }
 
+  /** Replace some elements; connectors bound to them follow automatically. */
   replaceElements(map) {
-    this.setElements(this.state.elements.map((e) => map.get(e.id) || e));
+    const next = this.state.elements.map((e) => map.get(e.id) || e);
+    this.setElements(reflowConnectors(next, new Set(map.keys())));
+  }
+
+  /** Remove elements by id, together with connectors attached to them. */
+  removeElements(ids, opts = {}) {
+    this.setElements(dropDangling(this.elements.filter((e) => !ids.has(e.id)), ids), opts);
   }
 
   commit() {
@@ -159,7 +169,9 @@ export class App {
       for (const el of sel) {
         const p = {};
         for (const [k, v] of Object.entries(patch)) {
-          if (k === 'font' || k === 'fontSize' || k === 'align') { if (el.type === 'text') p[k] = v; }
+          if (k === 'font' || k === 'fontSize') { if (el.type === 'text' || el.type === 'shape') p[k] = v; }
+          else if (k === 'align') { if (el.type === 'text') p[k] = v; }
+          else if (k === 'strokeColor' && v === 'transparent' && el.type !== 'shape') continue; // only shapes go borderless
           else if (k === 'startHead' || k === 'endHead') { if (el.type === 'line') p[k] = v; }
           else if (k === 'fillColor' || k === 'fillStyle') { if (el.type === 'shape') p[k] = v; }
           else if (k in el) p[k] = v;
@@ -167,6 +179,7 @@ export class App {
         if (!Object.keys(p).length) continue;
         let next = updateElement(el, p);
         if (el.type === 'text') next = withText(next, next.text);
+        if (el.type === 'shape' && next.label && ('font' in p || 'fontSize' in p)) next = withLabel(next, next.label);
         if (el.type === 'math' && 'strokeColor' in p) this.mathCache.delete(el.id);
         map.set(el.id, next);
       }
@@ -365,6 +378,7 @@ export class App {
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 
     if (e.button === 1 || this.spaceDown || this.state.tool === 'hand') {
+      if (this.spaceTap) this.spaceTap.panned = true; // Space was held to pan, not tapped
       this.action = { type: 'pan', last: sp };
       this.updateCursor();
       return;
@@ -378,6 +392,7 @@ export class App {
       case 'pen': return this.downPen(p, e);
       case 'text': return this.downText(p);
       case 'math': this.emit({ type: 'open-math', point: p }); return;
+      case 'mindmap': this.createCentralTopic(p); return;
       case 'eraser': return this.downEraser(p);
       case 'laser': this.action = { type: 'laser' }; this.laser.push({ p, t: performance.now() }); this.requestRender(); return;
     }
@@ -431,7 +446,13 @@ export class App {
     if (!a) return;
     switch (a.type) {
       case 'pan': this.updateCursor(); break;
-      case 'move': case 'resize': case 'rotate': case 'line-point':
+      case 'line-point':
+        this.endLinePoint(a);
+        this.snapHint = null;
+        this.commit();
+        this.emit('selection');
+        break;
+      case 'move': case 'resize': case 'rotate':
         this.snapHint = null;
         this.commit();
         this.emit('selection');
@@ -535,7 +556,7 @@ export class App {
     if (this.lineDraft) { this.finishLineDraft(false); return; }
     if (this.state.tool !== 'select') return;
     const hit = this.topHit(p);
-    if (hit && hit.type === 'text') { this.startTextEdit(hit); return; }
+    if (hit && (hit.type === 'text' || hit.type === 'shape')) { this.startTextEdit(hit); return; }
     if (hit && hit.type === 'math') { this.emit({ type: 'open-math', element: hit }); return; }
     if (!hit) this.downText(p);
   }
@@ -580,7 +601,15 @@ export class App {
       const frame = selectionFrame(sel);
       const origs = new Map(sel.map((el) => [el.id, el]));
       if (hd.id === 'rot') { this.action = { type: 'rotate', frame, origs }; return; }
-      if (hd.id.startsWith('p')) { this.action = { type: 'line-point', id: frame.el.id, index: +hd.id.slice(1), orig: frame.el }; return; }
+      if (hd.id.startsWith('p')) {
+        // Dragging a bound end detaches it; it re-attaches on release if dropped on an element.
+        const index = +hd.id.slice(1);
+        const last = frame.el.points.length - 1;
+        const orig = index === 0 && frame.el.startBinding ? { ...frame.el, startBinding: null }
+          : index === last && frame.el.endBinding ? { ...frame.el, endBinding: null } : frame.el;
+        this.action = { type: 'line-point', id: frame.el.id, index, orig };
+        return;
+      }
       this.action = { type: 'resize', frame, handle: hd.id, origs };
       return;
     }
@@ -606,7 +635,28 @@ export class App {
     const pts = [];
     for (const el of sel) { const b = getBounds(el); pts.push([b.minX, b.minY], [b.maxX, b.maxY]); }
     const bb = boundsOfPoints(pts);
-    this.action = { type: 'move', start: p, origs: new Map(sel.map((el) => [el.id, el])), bounds: bb, moved: false };
+    // A connector moved without the element it is attached to lets go of that element.
+    const ids = new Set(sel.map((el) => el.id));
+    const origs = new Map(sel.map((el) => {
+      if (el.type !== 'line') return [el.id, el];
+      const sb = el.startBinding && !ids.has(el.startBinding), eb = el.endBinding && !ids.has(el.endBinding);
+      return [el.id, sb || eb ? { ...el, startBinding: sb ? null : el.startBinding, endBinding: eb ? null : el.endBinding } : el];
+    }));
+    this.action = { type: 'move', start: p, origs, bounds: bb, moved: false };
+  }
+
+  /** On release of a line end: attach it to the element under it (not to the other end's element). */
+  endLinePoint(a) {
+    const line = this.byId(a.id);
+    if (!line) return;
+    const last = line.points.length - 1;
+    if (a.index !== 0 && a.index !== last) return;
+    const p = worldPoints(line)[a.index];
+    const other = a.index === 0 ? line.endBinding : line.startBinding;
+    const target = bindingTargetAt(this.elements, p, 4 / this.state.camera.zoom, new Set([line.id, other].filter(Boolean)));
+    const key = a.index === 0 ? 'startBinding' : 'endBinding';
+    if ((target ? target.id : null) === line[key]) return;
+    this.replaceElements(new Map([[line.id, updateElement(line, { [key]: target ? target.id : null })]]));
   }
 
   moveSelection(p, e) {
@@ -797,10 +847,14 @@ export class App {
     let kind = d.kind;
     if (kind === 'arc' && pts.length !== 3) kind = 'polyline';
     if (kind === 'segment' && pts.length > 2) pts = [pts[0], pts[pts.length - 1]];
-    const next = withWorldPoints(updateElement(el, { kind }), pts);
+    // Ends drawn on an element attach to it (object-to-object connectors).
+    const tol = 4 / this.state.camera.zoom;
+    const startEl = bindingTargetAt(this.elements, pts[0], tol, new Set([el.id]));
+    const endEl = bindingTargetAt(this.elements, pts[pts.length - 1], tol, new Set([el.id, startEl ? startEl.id : '']));
+    const next = withWorldPoints(updateElement(el, { kind, startBinding: startEl ? startEl.id : null, endBinding: endEl ? endEl.id : null }), pts);
     this.replaceElements(new Map([[el.id, next]]));
     this.commit();
-    this.afterCreate(next);
+    this.afterCreate(this.byId(el.id) || next);
   }
 
   cancelLineDraft() {
@@ -885,21 +939,28 @@ export class App {
     this.startTextEdit(created, true);
   }
 
-  startTextEdit(el, isNew = false) {
+  /** Edit a text element, or the label inside a shape. selectAll: start with the text selected. */
+  startTextEdit(el, isNew = false, selectAll = false) {
     this.finishTextEdit();
     this.state.editingId = el.id;
     this.editIsNew = isNew;
     this.select([el.id]);
     const ta = this.textEditor;
-    ta.value = el.text;
+    ta.value = el.type === 'shape' ? el.label || '' : el.text;
     ta.hidden = false;
     this.positionTextEditor();
     // Focus synchronously so keystrokes typed right after the click land in the editor,
     // not on the canvas (where they would trigger tool shortcuts).
     ta.focus({ preventScroll: true });
-    ta.setSelectionRange(ta.value.length, ta.value.length);
+    if (selectAll) ta.select();
+    else ta.setSelectionRange(ta.value.length, ta.value.length);
     this.requestRender();
     this.emit('editing');
+  }
+
+  get editingShape() {
+    const el = this.state.editingId ? this.byId(this.state.editingId) : null;
+    return el && el.type === 'shape' ? el : null;
   }
 
   positionTextEditor() {
@@ -909,16 +970,28 @@ export class App {
     if (!el) return;
     const ta = this.textEditor;
     const z = this.state.camera.zoom;
-    const tl = this.toScreen([el.x, el.y]);
     const m = measureText(ta.value || ' ', el.font, el.fontSize);
-    const w = Math.max(m.w, el.fontSize) * z + 8;
-    const h = m.h * z;
     const fam = el.font === 'arial' ? 'Arial, Arimo, sans-serif' : '"Patrick Hand", cursive';
+    let left, top, w, h, align, color, origin;
+    if (el.type === 'shape') {
+      // Centered inside the shape's box.
+      w = Math.max(m.w + 8, el.w - LABEL_PAD.x) * z;
+      h = m.h * z;
+      const c = this.toScreen([el.x + el.w / 2, el.y + el.h / 2]);
+      left = c[0] - w / 2; top = c[1] - h / 2;
+      align = 'center'; color = labelColor(el); origin = 'center center';
+    } else {
+      const tl = this.toScreen([el.x, el.y]);
+      w = Math.max(m.w, el.fontSize) * z + 8;
+      h = m.h * z;
+      left = tl[0]; top = tl[1];
+      align = el.align; color = el.strokeColor; origin = `${(el.w * z) / 2}px ${(el.h * z) / 2}px`;
+    }
     Object.assign(ta.style, {
-      left: tl[0] + 'px', top: tl[1] + 'px', width: w + 'px', height: h + 'px',
-      fontSize: el.fontSize * z + 'px', fontFamily: fam, color: el.strokeColor, textAlign: el.align,
+      left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px',
+      fontSize: el.fontSize * z + 'px', fontFamily: fam, color, textAlign: align,
       transform: el.angle ? `rotate(${el.angle}rad)` : 'none',
-      transformOrigin: `${(el.w * z) / 2}px ${(el.h * z) / 2}px`,
+      transformOrigin: origin,
       opacity: String(el.opacity / 100),
     });
   }
@@ -929,7 +1002,7 @@ export class App {
     const el = this.byId(this.state.editingId);
     if (!el) return;
     const value = nfc(ta.value);
-    this.replaceElements(new Map([[el.id, withText(el, value)]]));
+    this.replaceElements(new Map([[el.id, el.type === 'shape' ? withLabel(el, value) : withText(el, value)]]));
     this.positionTextEditor();
   }
 
@@ -942,15 +1015,73 @@ export class App {
     const el = this.byId(id);
     if (el) {
       const text = nfc(ta.value).replace(/\s+$/, '');
-      if (!text.trim()) this.setElements(this.elements.filter((x) => x.id !== id));
-      else this.replaceElements(new Map([[id, withText(el, text)]]));
-      this.commit();
-      if (text.trim() && this.editIsNew) this.afterCreate(this.byId(id));
+      if (el.type === 'shape') {
+        // A shape keeps existing when its label is cleared.
+        this.replaceElements(new Map([[id, withLabel(el, text)]]));
+        this.commit();
+      } else {
+        if (!text.trim()) this.removeElements(new Set([id]));
+        else this.replaceElements(new Map([[id, withText(el, text)]]));
+        this.commit();
+        if (text.trim() && this.editIsNew) this.afterCreate(this.byId(id));
+      }
     }
     ta.blur();
     this.canvas.focus({ preventScroll: true });
     this.requestRender();
     this.emit('editing');
+  }
+
+  // ---------- mind map ----------
+
+  /** The single selected element that can be a mind-map node (anything but lines/strokes). */
+  get mindmapNode() {
+    const sel = this.selected;
+    return sel.length === 1 && isBindable(sel[0]) ? sel[0] : null;
+  }
+
+  createCentralTopic(p) {
+    const node = centralTopic(this.state.style, p);
+    this.setElements([...this.elements, node], { commit: true });
+    if (!this.state.toolLocked) { this.state.tool = 'select'; this.updateCursor(); this.emit('tool'); }
+    this.startTextEdit(node, false, true);
+  }
+
+  /** Tab: new child topic to the right, connected by a branch; starts editing its label. */
+  addChildTopic(parent = this.mindmapNode) {
+    if (!parent) return;
+    this.finishTextEdit();
+    const cur = this.byId(parent.id);
+    if (!cur) return;
+    const r = addChildTopicTo(this.elements, cur, this.state.style);
+    this.setElements(r.elements, { commit: true });
+    this.revealElement(r.node);
+    this.startTextEdit(r.node, false, true);
+  }
+
+  /** Space / Enter: new sibling topic below (same parent). */
+  addSiblingTopic(node = this.mindmapNode) {
+    if (!node) return;
+    this.finishTextEdit();
+    const cur = this.byId(node.id);
+    if (!cur) return;
+    const r = addSiblingTopicTo(this.elements, cur, this.state.style);
+    this.setElements(r.elements, { commit: true });
+    this.revealElement(r.node);
+    this.startTextEdit(r.node, false, true);
+  }
+
+  /** Pan just enough to bring an element into view. */
+  revealElement(el) {
+    const b = getBounds(el);
+    const vb = viewportBounds(this.state.camera, this.renderer.width, this.renderer.height);
+    const m = 60 / this.state.camera.zoom;
+    const c = this.state.camera;
+    if (b.maxX > vb.maxX - m) c.scrollX -= b.maxX - (vb.maxX - m);
+    if (b.minX < vb.minX + m) c.scrollX += (vb.minX + m) - b.minX;
+    if (b.maxY > vb.maxY - m) c.scrollY -= b.maxY - (vb.maxY - m);
+    if (b.minY < vb.minY + m) c.scrollY += (vb.minY + m) - b.minY;
+    this.afterCameraChange();
   }
 
   /** Insert text at the caret if editing; otherwise create a text element at the viewport center. */
@@ -1049,7 +1180,7 @@ export class App {
     const ids = this.fadedIds || new Set();
     this.fadedIds = null;
     this.eraserTrail = null;
-    if (ids.size) this.setElements(this.elements.filter((e) => !ids.has(e.id)));
+    if (ids.size) this.removeElements(ids);
     this.commit();
   }
 
@@ -1057,16 +1188,17 @@ export class App {
 
   deleteSelected() {
     if (!this.state.selectedIds.size) return;
-    const ids = this.state.selectedIds;
-    this.setElements(this.elements.filter((e) => !ids.has(e.id)), { commit: true });
+    this.removeElements(new Set(this.state.selectedIds), { commit: true });
     this.select([]);
   }
 
   duplicateSelected(offset = 16) {
     const sel = this.selected;
     if (!sel.length) return;
-    const copies = sel.map((el) => ({ ...structuredClone(el), id: newId(), version: 1, x: el.x + offset, y: el.y + offset }));
-    this.setElements([...this.elements, ...copies], { commit: true });
+    const idMap = new Map(sel.map((el) => [el.id, newId()]));
+    // Copies keep links among themselves; links to elements outside the copy are dropped.
+    const copies = remapReferences(sel.map((el) => ({ ...structuredClone(el), id: idMap.get(el.id), version: 1, x: el.x + offset, y: el.y + offset })), idMap);
+    this.setElements(reflowConnectors([...this.elements, ...copies]), { commit: true });
     this.select(copies.map((c) => c.id));
   }
 
@@ -1178,8 +1310,9 @@ export class App {
     const b = boundsOfPoints(els.flatMap((el) => { const x = getBounds(el); return [[x.minX, x.minY], [x.maxX, x.maxY]]; }));
     const target = this.lastPointerInView() ? this.lastPointerWorld : this.viewportCenter();
     const dx = target[0] - (b.minX + b.maxX) / 2, dy = target[1] - (b.minY + b.maxY) / 2;
-    const placed = els.map((el) => ({ ...el, id: newId(), version: 1, x: el.x + dx, y: el.y + dy }));
-    this.setElements([...this.elements, ...placed], { commit: true });
+    const pasteIds = new Map(els.map((el) => [el.id, newId()]));
+    const placed = remapReferences(els.map((el) => ({ ...el, id: pasteIds.get(el.id), version: 1, x: el.x + dx, y: el.y + dy })), pasteIds);
+    this.setElements(reflowConnectors([...this.elements, ...placed]), { commit: true });
     this.setTool('select');
     this.select(placed.map((x) => x.id));
   }
@@ -1329,14 +1462,7 @@ export class App {
     this.finishTextEdit();
     const els = this.selected.length ? this.selected : this.elements;
     if (!els.length) return this.toast('Chưa có gì để xuất.', true);
-    // Make sure async resources are ready before drawing.
-    await Promise.all(els.map(async (el) => {
-      if (el.type === 'image') { this.getImage(el.fileId); await waitFor(() => this.imageCache.get(el.fileId)?.img, 3000); }
-      if (el.type === 'math') {
-        try { const r = await renderMathImage(el.latex, el.fontSize, el.strokeColor, 4); this.mathCache.set(el.id, { key: `${el.version}|${el.latex}|${el.fontSize}|${el.strokeColor}|4`, img: r.img, pending: false }); } catch { /* placeholder */ }
-      }
-    }));
-    const exportRes = { ...this.res, math: (el) => this.mathCache.get(el.id)?.img || null };
+    const exportRes = await this.prepareExport(els);
     let blob = null;
     try {
       const canvas = renderToCanvas(els, exportRes, 2);
@@ -1351,6 +1477,41 @@ export class App {
     const r = await store.saveBytes(base + '.png', 'image/png', await blob.arrayBuffer(), 'Ảnh PNG', 'png');
     if (r.ok) this.toast('Đã xuất ảnh PNG.');
     else if (!r.cancelled) this.toast(r.error || 'Không lưu được ảnh.', true);
+  }
+
+  /** Loads images and renders formulas at high resolution so exports never show placeholders. */
+  async prepareExport(els) {
+    await Promise.all(els.map(async (el) => {
+      if (el.type === 'image') { this.getImage(el.fileId); await waitFor(() => this.imageCache.get(el.fileId)?.img, 3000); }
+      if (el.type === 'math') {
+        try { const r = await renderMathImage(el.latex, el.fontSize, el.strokeColor, 4); this.mathCache.set(el.id, { key: `${el.version}|${el.latex}|${el.fontSize}|${el.strokeColor}|4`, img: r.img, pending: false }); } catch { /* placeholder */ }
+      }
+    }));
+    return { ...this.res, math: (el) => this.mathCache.get(el.id)?.img || null };
+  }
+
+  /** Export the selection (or everything) as a one-page PDF sized to the content. */
+  async exportPdf() {
+    this.finishTextEdit();
+    const els = this.selected.length ? this.selected : this.elements;
+    if (!els.length) return this.toast('Chưa có gì để xuất.', true);
+    const exportRes = await this.prepareExport(els);
+    let bytes;
+    try {
+      const padding = 32;
+      const canvas = renderToCanvas(els, exportRes, 2, padding);
+      const bs = els.map(getBounds);
+      const cssW = Math.max(...bs.map((b) => b.maxX)) - Math.min(...bs.map((b) => b.minX)) + padding * 2;
+      const cssH = Math.max(...bs.map((b) => b.maxY)) - Math.min(...bs.map((b) => b.minY)) + padding * 2;
+      bytes = await canvasToPdf(canvas, cssW, cssH, (this.state.fileName || 'Synto').replace(/\.synto$/i, ''));
+    } catch (err) {
+      console.error(err);
+      return this.toast('Không xuất được PDF: ' + (err && err.name === 'SecurityError' ? 'một ảnh SVG trong vùng chọn chặn việc xuất.' : (err.message || err)), true);
+    }
+    const base = (this.state.fileName || 'synto').replace(/\.synto$/i, '');
+    const r = await store.saveBytes(base + '.pdf', 'application/pdf', bytes, 'PDF', 'pdf');
+    if (r.ok) this.toast('Đã xuất PDF.');
+    else if (!r.cancelled) this.toast(r.error || 'Không lưu được PDF.', true);
   }
 
   // ---------- UI helpers ----------

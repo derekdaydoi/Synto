@@ -37,8 +37,10 @@ export function createElement(type, props = {}, style = DEFAULT_STYLE) {
   };
   for (const k of STYLE_KEYS) base[k] = style[k] ?? DEFAULT_STYLE[k];
   switch (type) {
-    case 'shape': Object.assign(base, { shapeId: 'rect', params: {} }); break;
-    case 'line': Object.assign(base, { kind: 'segment', points: [[0, 0]], startHead: style.startHead ?? 'none', endHead: style.endHead ?? 'none' }); break;
+    // label: text inside the shape; topic: mind-map node (box hugs its label); parentId: mind-map parent.
+    case 'shape': Object.assign(base, { shapeId: 'rect', params: {}, label: '', font: style.font ?? 'hand', fontSize: style.fontSize ?? 24, topic: false, parentId: null }); break;
+    // startBinding / endBinding: id of the element an end is attached to (connector follows it).
+    case 'line': Object.assign(base, { kind: 'segment', points: [[0, 0]], startHead: style.startHead ?? 'none', endHead: style.endHead ?? 'none', startBinding: null, endBinding: null }); break;
     case 'draw': Object.assign(base, { points: [], highlighter: false }); break;
     case 'text': Object.assign(base, { text: '', font: style.font ?? 'hand', fontSize: style.fontSize ?? 24, align: style.align ?? 'left' }); break;
     case 'math': Object.assign(base, { latex: '', source: '', mode: 'quick', fontSize: 28 }); break;
@@ -120,6 +122,24 @@ export function withText(el, text) {
   const t = nfc(text);
   const m = measureText(t, el.font, el.fontSize);
   return updateElement(el, { text: t, w: m.w, h: m.h });
+}
+
+export const LABEL_PAD = { x: 18, y: 10 };
+export const TOPIC_MIN = { w: 96, h: 44 };
+export const labelColor = (el) => (el.strokeColor === 'transparent' ? '#0a0a0a' : el.strokeColor);
+
+/**
+ * Sets a shape's label. Topics (mind-map boxes) hug the text; other shapes only grow when the
+ * text would not fit. The box stays centered on its current center.
+ */
+export function withLabel(el, text) {
+  const label = nfc(text);
+  const m = measureText(label || ' ', el.font, el.fontSize);
+  const needW = m.w + LABEL_PAD.x * 2, needH = m.h + LABEL_PAD.y * 2;
+  const w = el.topic ? Math.max(TOPIC_MIN.w, needW) : Math.max(el.w, label ? needW : 0);
+  const h = el.topic ? Math.max(TOPIC_MIN.h, needH) : Math.max(el.h, label ? needH : 0);
+  const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
+  return updateElement(el, { label, w, h, x: cx - w / 2, y: cy - h / 2 });
 }
 
 // ---------- pdf layout ----------
@@ -230,6 +250,8 @@ export function hitTest(el, p, tol) {
     return distToPolyline(lp, g.polylines[0].points) <= tol + width;
   }
   for (const s of g.polylines) if (distToPolyline(lp, s.points, s.closed) <= stroke) return true;
+  // A shape with a label (e.g. a borderless mind-map topic) is grabbable anywhere in its box.
+  if (el.type === 'shape' && el.label) return lp[0] >= 0 && lp[1] >= 0 && lp[0] <= el.w && lp[1] <= el.h;
   if (el.type === 'shape' && g.fillable && el.fillColor !== 'transparent') {
     return pointInRings(lp, g.polylines.filter((s) => s.closed).map((s) => s.points));
   }
@@ -252,6 +274,7 @@ export function snapPointsOf(el) {
 
 const COLOR_RE = /^(transparent|#[0-9a-fA-F]{3,8})$/;
 const num = (v, d = 0) => (isFiniteNumber(v) ? v : d);
+const refId = (v) => (typeof v === 'string' && v.length > 0 && v.length <= 64 ? v : null);
 const pick = (v, list, d) => (list.includes(v) ? v : d);
 const pointList = (arr, withPressure) => (Array.isArray(arr) ? arr : [])
   .filter((p) => Array.isArray(p) && isFiniteNumber(p[0]) && isFiniteNumber(p[1]))
@@ -284,12 +307,19 @@ export function sanitizeElement(raw) {
         points: clamp(Math.round(num(raw.params?.points, 5)), 3, 24),
         inner: clamp(num(raw.params?.inner, 0.45), 0.1, 0.95),
       };
+      el.label = str(raw.label, 5000);
+      el.font = pick(raw.font, ['hand', 'arial'], 'hand');
+      el.fontSize = clamp(num(raw.fontSize, 24), 4, 400);
+      el.topic = raw.topic === true;
+      el.parentId = refId(raw.parentId);
       break;
     case 'line':
       el.kind = pick(raw.kind, ['segment', 'polyline', 'curve', 'arc'], 'polyline');
       el.points = pointList(raw.points, false);
       el.startHead = pick(raw.startHead, ['none', 'arrow', 'dot', 'bar'], 'none');
       el.endHead = pick(raw.endHead, ['none', 'arrow', 'dot', 'bar'], 'none');
+      el.startBinding = refId(raw.startBinding);
+      el.endBinding = refId(raw.endBinding);
       if (el.points.length < 2) return null;
       if (el.kind === 'arc' && el.points.length !== 3) el.kind = 'polyline';
       break;

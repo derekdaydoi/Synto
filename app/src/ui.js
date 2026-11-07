@@ -44,6 +44,8 @@ const I = {
   grid: 'M4 4h16v16H4zM4 12h16M12 4v16',
   help: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7v.5M12 17h.01',
   front: 'M8 8h12v12H8zM4 4h12v4',
+  mindmap: 'M2 10h6v4H2zM16 3h6v4h-6zM16 17h6v4h-6zM8 12h3M11 5v14M11 5h5M11 19h5',
+  pdf: 'M6 2h9l5 5v15H6zM14 2v6h6M9 13h1.5a1.5 1.5 0 0 1 0 3H9v-3zm0 3v2',
   github: 'M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2',
   back: 'M4 4h12v12H4zM20 8v12H8',
 };
@@ -169,6 +171,7 @@ export class UI {
       line: T('line', 'Nét', I.curve, '3', { wide: true, onclick: (e) => this.toggleLines(e.currentTarget) }),
       pen: T('pen', 'Bút', I.pen, '4', { onclick: () => this.app.setTool('pen', { penMode: 'pen' }) }),
       text: T('text', 'Chữ', I.text, '5'),
+      mindmap: T('mindmap', 'Sơ đồ tư duy', I.mindmap, 'N'),
       math: T('math', 'Công thức', h('span', { class: 'glyph' }, '∑'), '6', { onclick: () => { this.app.setTool('math'); this.openMathEditor(null, null); } }),
       symbol: T('symbol', 'Ký hiệu', h('span', { class: 'glyph' }, 'Ω'), '7', { onclick: (e) => this.toggleSymbols(e.currentTarget) }),
       image: T('image', 'Chèn ảnh', I.image, '8', { cls: 't-extra', onclick: () => this.app.pickAndInsert('image') }),
@@ -178,7 +181,7 @@ export class UI {
     };
     const moreBtn = h('button', { class: 'tb', 'aria-label': 'Thêm công cụ', title: 'Thêm', onclick: (e) => this.toggleMore(e.currentTarget) }, icon(I.more, 19, 'stroke-width="3"'));
     const tb = this.toolButtons;
-    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.shape, tb.line, tb.pen, tb.text, tb.math, tb.symbol, tb.image, tb.file, tb.eraser,
+    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.shape, tb.line, tb.pen, tb.text, tb.mindmap, tb.math, tb.symbol, tb.image, tb.file, tb.eraser,
       h('span', { class: 'sep t-extra' }), tb.laser, moreBtn);
     this.hint = h('span', { class: 'hint' });
     host.append(bar, this.hint);
@@ -211,6 +214,7 @@ export class UI {
       hand: 'Kéo để di chuyển mặt giấy',
       laser: 'Bút laser để chỉ, không lưu lại',
       math: 'Bấm lên mặt giấy để đặt công thức',
+      mindmap: 'Bấm để tạo chủ đề trung tâm · Tab: nhánh con · Space: nhánh ngang hàng',
     };
     this.hint.textContent = hints[s.tool] || '';
   }
@@ -222,7 +226,7 @@ export class UI {
     this.status = h('span', { class: 'status' });
     this.propsToggle = h('button', { class: 'tb soft props-toggle', 'aria-label': 'Thuộc tính', title: 'Thuộc tính', onclick: () => this.props.classList.toggle('open') }, icon(I.sliders, 16));
     el.append(this.status, this.propsToggle,
-      h('button', { class: 'btn primary', title: 'Lưu file — Ctrl+S', onclick: () => this.app.saveToFile() }, icon(I.save, 14), h('span', { class: 'btn-text' }, 'Lưu')));
+      h('button', { class: 'btn primary', title: 'Xuất PDF — Ctrl+P (Ctrl+S trong menu để lưu file .synto)', 'aria-label': 'Xuất PDF', onclick: () => this.app.exportPdf() }, icon(I.pdf, 15), h('span', { class: 'btn-text' }, 'Xuất PDF')));
   }
 
   refreshStatus() {
@@ -297,9 +301,13 @@ export class UI {
     const val = (k) => (sel.length && sel[0][k] !== undefined ? sel[0][k] : st[k]);
 
     if (has('shape', 'line', 'draw', 'text', 'math')) {
-      panel.append(row('Màu nét', h('div', { class: 'line' }, COLORS.map((c) => h('button', {
-        class: 'swatch' + (val('strokeColor') === c ? ' on' : ''), style: { background: c }, 'aria-label': 'Màu ' + c, onclick: () => app.setStyle({ strokeColor: c }),
-      })), colorInput(val('strokeColor'), (c) => app.setStyle({ strokeColor: c })))));
+      // Only shapes can be borderless (e.g. mind-map topics without a box).
+      const onlyShapes = [...types].every((t) => t === 'shape');
+      panel.append(row(onlyShapes ? 'Màu viền' : 'Màu nét', h('div', { class: 'line' },
+        onlyShapes ? h('button', { class: 'swatch none' + (val('strokeColor') === 'transparent' ? ' on' : ''), 'aria-label': 'Không viền', title: 'Không viền', onclick: () => app.setStyle({ strokeColor: 'transparent' }) }) : null,
+        COLORS.map((c) => h('button', {
+          class: 'swatch' + (val('strokeColor') === c ? ' on' : ''), style: { background: c }, 'aria-label': 'Màu ' + c, onclick: () => app.setStyle({ strokeColor: c }),
+        })), colorInput(val('strokeColor'), (c) => app.setStyle({ strokeColor: c })))));
     }
     if (has('shape')) {
       panel.append(row('Màu nền', h('div', { class: 'line' }, FILLS.map((c) => h('button', {
@@ -322,14 +330,19 @@ export class UI {
       panel.append(row('Đầu bắt đầu', seg(heads, val('startHead'), (v) => app.setStyle({ startHead: v }))));
       panel.append(row('Đầu kết thúc', seg(heads, val('endHead'), (v) => app.setStyle({ endHead: v }))));
     }
-    if (has('text')) {
-      panel.append(row('Phông chữ', h('div', { class: 'grid2' },
+    if (has('text', 'shape')) {
+      panel.append(row(has('text') ? 'Phông chữ' : 'Chữ trong hình', h('div', { class: 'grid2' },
         h('button', { class: 'pb' + (val('font') === 'hand' ? ' on' : ''), style: { height: '44px', flexDirection: 'column' }, onclick: () => app.setStyle({ font: 'hand' }) },
           h('span', { style: { fontFamily: '"Patrick Hand"', fontSize: '20px', lineHeight: '1' } }, 'Aa'), h('span', { style: { fontSize: '10px' } }, 'Viết tay')),
         h('button', { class: 'pb' + (val('font') === 'arial' ? ' on' : ''), style: { height: '44px', flexDirection: 'column' }, onclick: () => app.setStyle({ font: 'arial' }) },
           h('span', { style: { fontFamily: 'Arial, Arimo, sans-serif', fontSize: '17px', lineHeight: '1.1' } }, 'Aa'), h('span', { style: { fontSize: '10px' } }, 'Arial')))));
-      panel.append(row('Cỡ chữ', seg([[16, 'S'], [24, 'M'], [36, 'L'], [52, 'XL']], val('fontSize'), (v) => app.setStyle({ fontSize: v }))));
-      panel.append(row('Căn chữ', seg([['left', 'Trái'], ['center', 'Giữa'], ['right', 'Phải']], val('align'), (v) => app.setStyle({ align: v }))));
+      panel.append(row('Cỡ chữ', seg([[16, 'S'], [20, 'M'], [26, 'L'], [36, 'XL']], val('fontSize'), (v) => app.setStyle({ fontSize: v }))));
+      if (has('text')) panel.append(row('Căn chữ', seg([['left', 'Trái'], ['center', 'Giữa'], ['right', 'Phải']], val('align'), (v) => app.setStyle({ align: v }))));
+    }
+    if (sel.length === 1 && sel[0].type !== 'line' && sel[0].type !== 'draw') {
+      panel.append(row('Sơ đồ tư duy', h('div', { class: 'line' },
+        h('button', { class: 'pb', title: 'Thêm nhánh con (Tab)', onclick: () => app.addChildTopic() }, '+ Nhánh con'),
+        h('button', { class: 'pb', title: 'Thêm nhánh ngang hàng (Space)', onclick: () => app.addSiblingTopic() }, '+ Ngang hàng'))));
     }
     const shapeSel = sel.length === 1 && sel[0].type === 'shape' ? sel[0] : null;
     const shapeId = shapeSel ? shapeSel.shapeId : !sel.length && s.tool === 'shape' ? s.shapeId : null;
@@ -417,6 +430,7 @@ export class UI {
     this.openPopover('menu', this.menuBtn, h('div', { class: 'menu' },
       item(I.open, 'Mở file…', 'Ctrl+O', () => app.openFromFile()),
       item(I.save, 'Lưu file…', 'Ctrl+S', () => app.saveToFile()),
+      item(I.pdf, 'Xuất PDF', 'Ctrl+P', () => app.exportPdf()),
       item(I.export, 'Xuất ảnh PNG', 'Ctrl+Shift+E', () => app.exportPng()),
       h('div', { class: 'menu-sep' }),
       item(I.image, 'Chèn ảnh…', '', () => app.pickAndInsert('image')),
@@ -545,6 +559,8 @@ export class UI {
       ['Sao chép / Dán', 'Ctrl+C / Ctrl+V'], ['Lưu / Mở', 'Ctrl+S / Ctrl+O'], ['Xuất PNG', 'Ctrl+Shift+E'], ['Phóng to / nhỏ', 'Ctrl+= / Ctrl+-, Ctrl+lăn chuột'],
       ['Về 100%', 'Ctrl+0'], ['Vừa nội dung', 'Shift+1'], ['Đưa lên / xuống', 'Ctrl+] / Ctrl+['], ['Giữ tỉ lệ / khoá góc', 'Shift'], ['Tắt bắt điểm tạm thời', 'Alt'],
       ['Kết thúc nét nhiều điểm', 'Enter / bấm đúp'], ['Đổi cỡ tẩy', '[ / ]'],
+      ['Sơ đồ tư duy', 'N'], ['Nhánh con (đang chọn chủ đề)', 'Tab'], ['Nhánh ngang hàng', 'Space / Enter'],
+      ['Sửa chữ trong hình', 'F2 / bấm đúp'], ['Xuất PDF', 'Ctrl+P'],
     ];
     this.openDialog('Phím tắt', h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))));
   }

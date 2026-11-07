@@ -3,7 +3,7 @@
 import rough from '../vendor/roughjs/rough.esm.js';
 import { getStroke } from '../vendor/perfect-freehand/index.mjs';
 import {
-  FONT_FAMILY, LINE_HEIGHT, PDF, getBounds, localGeometry, linePathD, linePolyline, pdfLayout, pdfCurrentPage, headSize,
+  FONT_FAMILY, LINE_HEIGHT, PDF, getBounds, localGeometry, linePathD, linePolyline, pdfLayout, pdfCurrentPage, headSize, labelColor,
 } from './elements.js';
 import { pathToString } from './svgpath.js';
 import { boundsIntersect } from './geometry.js';
@@ -26,7 +26,7 @@ function roughOptions(el) {
     seed: el.seed,
     roughness: el.roughness === 0 ? 0 : el.roughness === 2 ? 2.2 : 1,
     bowing: el.roughness === 0 ? 0 : 1,
-    stroke: el.strokeColor,
+    stroke: el.strokeColor === 'transparent' ? 'none' : el.strokeColor,
     strokeWidth: sw,
     strokeLineDash: DASH[el.strokeStyle],
     disableMultiStroke: el.strokeStyle !== 'solid',
@@ -67,7 +67,7 @@ function buildDrawables(gen, el) {
     if (g.fillCmds.length && el.fillColor !== 'transparent') {
       list.push(gen.path(pathToString(g.fillCmds), { ...o, stroke: 'none', fill: el.fillColor }));
     }
-    list.push(gen.path(pathToString(g.cmds), { ...o, fill: undefined }));
+    if (o.stroke !== 'none') list.push(gen.path(pathToString(g.cmds), { ...o, fill: undefined }));
   } else if (el.type === 'line') {
     const d = linePathD(el);
     if (d) list.push(gen.path(d, { ...o, fill: undefined }));
@@ -128,6 +128,7 @@ export function drawElement(ctx, rc, el, res, opts = {}) {
       let list = drawableCache.get(el);
       if (!list) { list = buildDrawables(rc.generator, el); drawableCache.set(el, list); }
       for (const d of list) rc.draw(d);
+      if (el.type === 'shape' && el.label && !opts.hideLabel) drawLabel(ctx, el);
       break;
     }
     case 'draw': {
@@ -170,6 +171,18 @@ export function drawElement(ctx, rc, el, res, opts = {}) {
       break;
   }
   ctx.restore();
+}
+
+/** Label centered in a shape's box (local coords). */
+function drawLabel(ctx, el) {
+  ctx.fillStyle = labelColor(el);
+  ctx.font = `${el.fontSize}px ${FONT_FAMILY[el.font] || FONT_FAMILY.hand}`;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
+  const lh = el.fontSize * LINE_HEIGHT;
+  const lines = el.label.split('\n');
+  const top = el.h / 2 - (lines.length * lh) / 2 + (lh - el.fontSize) / 2;
+  lines.forEach((line, i) => ctx.fillText(line, el.w / 2, top + i * lh));
 }
 
 function placeholder(ctx, w, h, label) {
@@ -289,9 +302,10 @@ export class Renderer {
     ctx.setTransform(z, 0, 0, z, camera.scrollX * z, camera.scrollY * z);
     const vb = viewportBounds(camera, this.width, this.height);
     for (const el of view.elements) {
-      if (el.id === view.editingId) continue;
+      const editing = el.id === view.editingId;
+      if (editing && el.type !== 'shape') continue; // text being edited is shown by the editor
       if (!boundsIntersect(getBounds(el), vb)) continue;
-      drawElement(ctx, this.rc, el, view.res, { faded: view.fadedIds && view.fadedIds.has(el.id), zoom: camera.zoom, dpr, scale: camera.zoom * dpr });
+      drawElement(ctx, this.rc, el, view.res, { faded: view.fadedIds && view.fadedIds.has(el.id), zoom: camera.zoom, dpr, scale: camera.zoom * dpr, hideLabel: editing });
     }
 
     // Screen-space overlays

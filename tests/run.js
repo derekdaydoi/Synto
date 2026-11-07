@@ -8,6 +8,7 @@ import './elements.test.js';
 import './snapping.test.js';
 import './transform.test.js';
 import './storage.test.js';
+import './mindmap.test.js';
 
 const out = document.getElementById('out');
 let pass = 0, fail = 0;
