@@ -38,6 +38,7 @@ async function start() {
   c.addEventListener('pointercancel', (e) => app.onPointerCancel(e));
   c.addEventListener('lostpointercapture', (e) => { if (app.action && app.pointers.has(e.pointerId)) app.onPointerUp(e); });
   c.addEventListener('dblclick', (e) => app.onDoubleClick(e));
+  c.addEventListener('pointerleave', () => { app.pointerScreen = null; app.requestRender(); });
   c.addEventListener('wheel', (e) => app.onWheel(e), { passive: false });
   c.addEventListener('contextmenu', (e) => e.preventDefault());
   // Block browser zoom gestures (Ctrl+wheel outside the canvas, pinch) from scaling the UI.
@@ -168,6 +169,11 @@ function onKey(e, app, ui) {
     return;
   }
   if (e.altKey) return;
+  if (app.state.tool === 'eraser' && (code === 'BracketLeft' || code === 'BracketRight')) {
+    const r = app.state.eraserSize;
+    app.setEraserSize(code === 'BracketRight' ? Math.max(r + 1, r * 1.25) : Math.min(r - 1, r / 1.25));
+    return;
+  }
   if (key === '?' || (code === 'Slash' && e.shiftKey)) { ui.openHelp(); return; }
   if (code === 'Digit1' && e.shiftKey) { app.zoomToFit(); return; }
 

@@ -307,9 +307,84 @@ export class Renderer {
       ctx.fillRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
       ctx.strokeRect(Math.min(a[0], b[0]) + 0.5, Math.min(a[1], b[1]) + 0.5, Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
     }
-    if (view.eraserTrail && view.eraserTrail.length > 1) this.drawTrail(view.eraserTrail.map(S), 'rgba(120,120,120,', 10);
-    if (view.laserTrail && view.laserTrail.length > 1) this.drawTrail(view.laserTrail.map(S), 'rgba(224,49,49,', 5);
+    if (view.eraserTrail && view.eraserTrail.length > 1) this.drawTrail(view.eraserTrail.map(S), 'rgba(120,120,120,', view.eraserWidth || 10);
+    if (view.laser && view.laser.points.length) this.drawLaser(view.laser, S);
+    if (view.eraserCursor) this.drawEraserCursor(view.eraserCursor.p, view.eraserCursor.r);
+    if (view.laserDot) this.drawLaserDot(view.laserDot, 1);
     if (view.snap) this.drawSnap(S(view.snap.point), view.snap.label);
+  }
+
+  drawEraserCursor(p, r) {
+    const { ctx } = this;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r + 1.5, 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.stroke();
+  }
+
+  /** Glowing red dot, like the beam of a real laser pointer. */
+  drawLaserDot(p, strength) {
+    const { ctx } = this;
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 14);
+    g.addColorStop(0, `rgba(255,70,60,${0.55 * strength})`);
+    g.addColorStop(1, 'rgba(255,40,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,30,30,${strength})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,235,230,${strength})`;
+    ctx.fill();
+  }
+
+  /**
+   * Laser trail: tapers toward the tail, fades with age, red glow with a bright core.
+   * laser: {points: [{p, t}], now, life}
+   */
+  drawLaser(laser, S) {
+    const { ctx } = this;
+    const pts = laser.points.map((q) => ({ s: S(q.p), a: 1 - (laser.now - q.t) / laser.life }));
+    ctx.save();
+    // Butt caps: segments meet at shared midpoints with the same tangent, so translucent
+    // strokes never overlap (round caps would leave darker "beads" at every joint).
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    const pass = (width, color, blur) => {
+      ctx.shadowBlur = blur;
+      ctx.shadowColor = 'rgba(255,30,30,0.9)';
+      for (let i = 1; i < pts.length; i++) {
+        const a = Math.max(0, Math.min(pts[i].a, pts[i - 1].a));
+        if (a <= 0) continue;
+        // Width grows toward the newest point; smooth through midpoints.
+        const t = i / pts.length;
+        ctx.lineWidth = width * (0.25 + 0.75 * t) * (0.4 + 0.6 * a);
+        ctx.strokeStyle = color(a);
+        const p0 = pts[i - 1].s, p1 = pts[i].s;
+        const pm = i > 1 ? [(pts[i - 2].s[0] + p0[0]) / 2, (pts[i - 2].s[1] + p0[1]) / 2] : p0;
+        const pn = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+        ctx.beginPath();
+        ctx.moveTo(pm[0], pm[1]);
+        ctx.quadraticCurveTo(p0[0], p0[1], pn[0], pn[1]);
+        if (i === pts.length - 1) ctx.lineTo(p1[0], p1[1]);
+        ctx.stroke();
+      }
+    };
+    pass(9, (a) => `rgba(255,40,40,${0.55 * a})`, 14);
+    pass(3.5, (a) => `rgba(255,225,220,${0.95 * a})`, 0);
+    ctx.restore();
   }
 
   drawGrid(camera) {

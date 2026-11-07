@@ -12,6 +12,9 @@ công thức toán, ký hiệu, nét vẽ có bắt điểm, 63 hình phẳng, �
 Chữ dùng **Patrick Hand** (viết tay) và **Arial**, cả hai đủ dấu tiếng Việt.
 
 Bản desktop là một file `Synto.exe` (~4 MB) chạy hoàn toàn offline trên Windows 10/11.
+Bản web chạy ngay trên trình duyệt: **https://derekdaydoi.github.io/Synto/**
+
+© derekdaydoi
 
 ## Chạy
 
@@ -58,6 +61,12 @@ Smoke test giao diện trong exe, dùng hồ sơ dữ liệu riêng để không
 
 ```
 dist\Synto.exe --dev app --script tests\e2e-smoke.js --data build\test-profile
+```
+
+Đẩy bản web lên GitHub Pages (nhánh `gh-pages`):
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\deploy-pages.ps1
 ```
 
 ## Cấu trúc

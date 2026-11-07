@@ -20,6 +20,7 @@ const ZOOM_MIN = 0.1, ZOOM_MAX = 8;
 const HIT_TOL = 6; // screen px
 const SNAP_RADIUS = 12; // screen px
 const IMAGE_MIME = /^image\/(png|jpeg|gif|webp|svg\+xml)$/;
+const LASER_LIFE = 900; // ms a laser trail point stays visible
 
 export const TOOLS = ['hand', 'select', 'shape', 'line', 'pen', 'text', 'math', 'eraser', 'laser'];
 
@@ -45,7 +46,9 @@ export class App {
       pdfAnnotate: false,
       showGrid: true,
       fileName: null,
+      eraserSize: 12, // radius in screen px
     };
+    this.pointerScreen = null; // last pointer position over the canvas (for eraser/laser cursors)
     this.history = new History();
     this.listeners = new Set();
     this.action = null;
@@ -259,7 +262,9 @@ export class App {
 
   renderNow() {
     const now = performance.now();
-    this.laser = this.laser.filter((p) => now - p.t < 700);
+    this.laser = this.laser.filter((p) => now - p.t < LASER_LIFE);
+    const tool = this.state.tool;
+    const cursorTool = (tool === 'eraser' || tool === 'laser') && !this.spaceDown && this.pointerScreen && !(this.action && this.action.type === 'pan');
     this.renderer.render({
       camera: this.state.camera,
       elements: this.state.elements,
@@ -269,7 +274,10 @@ export class App {
       snap: this.snapHint,
       marquee: this.action && this.action.type === 'marquee' ? [this.action.start, this.action.end] : null,
       eraserTrail: this.eraserTrail,
-      laserTrail: this.laser.map((p) => p.p),
+      eraserWidth: this.state.eraserSize * 2,
+      laser: { points: this.laser, now, life: LASER_LIFE },
+      eraserCursor: cursorTool && tool === 'eraser' ? { p: this.pointerScreen, r: this.state.eraserSize } : null,
+      laserDot: cursorTool && tool === 'laser' ? this.pointerScreen : null,
       hideHandles: !!(this.action && ['move', 'resize', 'rotate'].includes(this.action.type)),
       showGrid: this.state.showGrid,
       res: this.res,
@@ -382,6 +390,8 @@ export class App {
     const sp = this.eventPoint(e);
     const p = this.toWorld(sp[0], sp[1]);
     this.lastPointerWorld = p;
+    this.pointerScreen = sp;
+    if (this.state.tool === 'eraser' || this.state.tool === 'laser') this.requestRender();
     const a = this.action;
     if (!a) {
       if (this.lineDraft) this.moveLineDraft(p, e.shiftKey);
@@ -998,7 +1008,7 @@ export class App {
 
   moveEraser(p) {
     const a = this.action;
-    const step = 4 / this.state.camera.zoom;
+    const step = Math.max(2, this.state.eraserSize / 2) / this.state.camera.zoom;
     const d = dist(a.last, p);
     const n = Math.max(1, Math.ceil(d / step));
     for (let i = 1; i <= n; i++) this.eraseAt([a.last[0] + ((p[0] - a.last[0]) * i) / n, a.last[1] + ((p[1] - a.last[1]) * i) / n]);
@@ -1008,8 +1018,16 @@ export class App {
     this.requestRender();
   }
 
+  /** silent: skip the UI refresh (used while dragging the slider so it is not rebuilt mid-drag). */
+  setEraserSize(r, silent = false) {
+    this.state.eraserSize = clamp(Math.round(r), 3, 80);
+    this.autosave();
+    this.requestRender();
+    if (!silent) this.emit('style');
+  }
+
   eraseAt(p) {
-    const tol = 8 / this.state.camera.zoom;
+    const tol = this.state.eraserSize / this.state.camera.zoom;
     for (const el of this.elements) {
       if (el.type === 'pdf' && this.state.pdfAnnotate) { this.eraseAnnotations(el, p, tol); continue; }
       if (!hitTest(el, p, tol)) continue;
@@ -1229,8 +1247,8 @@ export class App {
     try {
       this.saveState = 'saving';
       this.emit('save');
-      const { camera, style, snap, shapeId, shapeParams, lineKind, showGrid, fileName } = this.state;
-      await store.saveScene({ version: 1, elements: this.state.elements, camera, style, snap, shapeId, shapeParams, lineKind, showGrid, fileName });
+      const { camera, style, snap, shapeId, shapeParams, lineKind, showGrid, fileName, eraserSize } = this.state;
+      await store.saveScene({ version: 1, elements: this.state.elements, camera, style, snap, shapeId, shapeParams, lineKind, showGrid, fileName, eraserSize });
       this.saveState = 'saved';
     } catch (err) {
       console.error(err);
@@ -1253,6 +1271,7 @@ export class App {
         if (['segment', 'polyline', 'curve', 'arc'].includes(s.lineKind)) this.state.lineKind = s.lineKind;
         if (typeof s.showGrid === 'boolean') this.state.showGrid = s.showGrid;
         if (typeof s.fileName === 'string') this.state.fileName = s.fileName;
+        if (Number.isFinite(s.eraserSize)) this.state.eraserSize = clamp(Math.round(s.eraserSize), 3, 80);
         // Only now (empty undo history) is it safe to drop files nothing references.
         store.collectGarbage(els).catch(() => {});
       }
@@ -1352,7 +1371,7 @@ export class App {
       : this.spaceDown || t === 'hand' ? 'grab'
       : t === 'text' ? 'text'
       : t === 'select' ? 'default'
-      : t === 'eraser' ? 'cell'
+      : t === 'eraser' || t === 'laser' ? 'none' // drawn on the canvas (size ring / red dot)
       : 'crosshair';
     this.canvas.style.cursor = c;
   }

@@ -38,19 +38,17 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 .isl { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 
 /* Buttons */
-.tb { position: relative; flex: 0 0 auto; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent;
+.tb { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent;
   display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--ink); }
 .tb:hover { background: var(--hover); }
 .tb:focus-visible, .pb:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tb.on { background: var(--ink); color: #fff; }
-.tb .k { position: absolute; right: 3px; bottom: 1px; font-size: 9px; color: var(--muted); line-height: 1; }
-.tb.on .k { color: #bdbdbd; }
-.tb.wide { width: 46px; gap: 2px; }
+.tb.wide { width: 52px; gap: 2px; }
 .tb.soft { background: var(--chip); }
 .tb[disabled] { opacity: .35; cursor: default; background: transparent; }
-.tb .glyph { font-family: "Times New Roman", serif; font-size: 18px; line-height: 1; }
-.sep { flex: 0 0 1px; height: 20px; background: var(--line); margin: 0 4px; }
-.btn { height: 36px; border: 0; border-radius: 8px; padding: 0 14px; background: var(--chip); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+.tb .glyph { font-family: "Times New Roman", serif; font-size: 22px; line-height: 1; }
+.sep { flex: 0 0 1px; height: 24px; background: var(--line); margin: 0 4px; }
+.btn { height: 40px; border: 0; border-radius: 8px; padding: 0 14px; background: var(--chip); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
 .btn.primary { background: var(--ink); color: #fff; }
 .btn.ghost { background: transparent; }
 .btn.danger { background: #fdecec; color: var(--danger); }
@@ -62,7 +60,9 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 
 /* Chrome layout */
 .top-l { position: absolute; left: 16px; top: 16px; display: flex; align-items: center; gap: 12px; min-width: 0; z-index: 5; }
-.logo { flex: 0 0 auto; height: 28px; width: auto; display: block; }
+.brand { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.logo { flex: 0 0 auto; height: 26px; width: auto; display: block; }
+.credit { font-size: 10px; line-height: 1; color: #8a8a8a; letter-spacing: .02em; padding-left: 2px; white-space: nowrap; }
 .docname { color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
 .top-r { position: absolute; right: 16px; top: 16px; display: flex; align-items: center; gap: 8px; z-index: 5; }
 .status { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -80,8 +80,8 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 .bl { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 8px; z-index: 5; }
 .br { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 8px; z-index: 5; }
 .group { display: flex; align-items: center; background: var(--chip); border-radius: 8px; }
-.zoom-label { height: 36px; min-width: 52px; border: 0; background: transparent; font-size: 12px; padding: 0 6px; }
-.chip-snap { height: 36px; min-width: 36px; border: 0; border-radius: 8px; padding: 0 10px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.zoom-label { height: 40px; min-width: 52px; border: 0; background: transparent; font-size: 12px; padding: 0 6px; }
+.chip-snap { height: 40px; min-width: 40px; border: 0; border-radius: 8px; padding: 0 10px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .chip-snap.on { background: var(--accent-soft); color: var(--accent-ink); }
 .chip-snap.off { background: var(--chip); color: var(--sub); }
 
@@ -156,7 +156,7 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 @media (max-width: 789px) {
   .tools { top: auto; bottom: 12px; left: 12px; right: 12px; transform: none; max-width: none; }
   .toolbar { width: 100%; }
-  .tb { width: 44px; height: 44px; }
+  .tb { width: 46px; height: 46px; }
   .bl, .br { bottom: 76px; }
   .zoom-group { display: none; }
   .snap-text, .btn-text { display: none; }

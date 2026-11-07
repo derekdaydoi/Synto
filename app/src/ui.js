@@ -136,7 +136,10 @@ export class UI {
     const el = this.root.querySelector('#top-left');
     this.menuBtn = h('button', { class: 'tb soft', 'aria-label': 'Menu', title: 'Menu', onclick: () => this.toggleMenu() }, icon(I.menu, 18));
     this.docName = h('span', { class: 'docname' });
-    el.append(this.menuBtn, h('img', { class: 'logo', src: 'assets/logo.png', alt: 'Synto', width: 93, height: 28, draggable: 'false' }), this.docName);
+    const brand = h('div', { class: 'brand' },
+      h('img', { class: 'logo', src: 'assets/logo.png', alt: 'Synto', width: 87, height: 26, draggable: 'false' }),
+      h('span', { class: 'credit' }, '© derekdaydoi'));
+    el.append(this.menuBtn, brand, this.docName);
   }
 
   refreshDocName() {
@@ -153,10 +156,11 @@ export class UI {
     const bar = h('div', { class: 'toolbar isl', role: 'toolbar', 'aria-label': 'Công cụ' });
     const T = (id, label, ic, key, extra = {}) => {
       const b = h('button', { class: 'tb' + (extra.wide ? ' wide' : '') + (extra.cls ? ' ' + extra.cls : ''), 'aria-label': `${label}${key ? ' (' + key + ')' : ''}`, title: `${label}${key ? ' — ' + key : ''}`, 'data-tool': id, onclick: extra.onclick || (() => this.app.setTool(id)) },
-        typeof ic === 'string' ? icon(ic, 16) : ic, extra.wide ? icon(I.caret, 8, 'stroke-width="3"') : null, key ? h('span', { class: 'k' }, key) : null);
+        // Shortcut keys stay in the tooltip only; no number badges on the buttons.
+        typeof ic === 'string' ? icon(ic, 19) : ic, extra.wide ? icon(I.caret, 9, 'stroke-width="3"') : null);
       return b;
     };
-    this.lockBtn = h('button', { class: 'tb', 'aria-label': 'Giữ công cụ sau khi vẽ (Q)', title: 'Giữ công cụ — Q', onclick: () => { this.app.state.toolLocked = !this.app.state.toolLocked; this.refreshToolbar(); } }, icon(I.unlock, 16));
+    this.lockBtn = h('button', { class: 'tb', 'aria-label': 'Giữ công cụ sau khi vẽ (Q)', title: 'Giữ công cụ — Q', onclick: () => { this.app.state.toolLocked = !this.app.state.toolLocked; this.refreshToolbar(); } }, icon(I.unlock, 19));
     this.toolButtons = {
       hand: T('hand', 'Kéo', I.hand, 'H'),
       select: T('select', 'Chọn', I.select, '1'),
@@ -171,7 +175,7 @@ export class UI {
       eraser: T('eraser', 'Tẩy', I.eraser, '0'),
       laser: T('laser', 'Bút laser', I.laser, 'K', { cls: 't-extra' }),
     };
-    const moreBtn = h('button', { class: 'tb', 'aria-label': 'Thêm công cụ', title: 'Thêm', onclick: (e) => this.toggleMore(e.currentTarget) }, icon(I.more, 16, 'stroke-width="3"'));
+    const moreBtn = h('button', { class: 'tb', 'aria-label': 'Thêm công cụ', title: 'Thêm', onclick: (e) => this.toggleMore(e.currentTarget) }, icon(I.more, 19, 'stroke-width="3"'));
     const tb = this.toolButtons;
     bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.shape, tb.line, tb.pen, tb.text, tb.math, tb.symbol, tb.image, tb.file, tb.eraser,
       h('span', { class: 'sep t-extra' }), tb.laser, moreBtn);
@@ -188,14 +192,14 @@ export class UI {
     }
     // Shape / line buttons show the current choice.
     const shapeBtn = this.toolButtons.shape;
-    shapeBtn.replaceChild(shapeIcon(s.shapeId, 16, s.shapeParams), shapeBtn.firstChild);
+    shapeBtn.replaceChild(shapeIcon(s.shapeId, 19, s.shapeParams), shapeBtn.firstChild);
     const lineIcons = { segment: I.segment, polyline: I.polyline, curve: I.curve, arc: I.arc };
     const lineBtn = this.toolButtons.line;
     const lic = s.tool === 'pen' && s.penMode === 'highlighter' ? I.highlighter : lineIcons[s.lineKind] || I.curve;
-    lineBtn.replaceChild(icon(lic, 16), lineBtn.firstChild);
+    lineBtn.replaceChild(icon(lic, 19), lineBtn.firstChild);
     lineBtn.classList.toggle('on', s.tool === 'line' || (s.tool === 'pen' && s.penMode === 'highlighter'));
     this.lockBtn.classList.toggle('on', s.toolLocked);
-    this.lockBtn.replaceChild(icon(s.toolLocked ? I.lock : I.unlock, 16), this.lockBtn.firstChild);
+    this.lockBtn.replaceChild(icon(s.toolLocked ? I.lock : I.unlock, 19), this.lockBtn.firstChild);
     const hints = {
       select: 'Kéo để chọn nhiều · Shift để giữ tỉ lệ · Alt để tắt bắt điểm',
       shape: 'Kéo để vẽ hình · Shift: giữ tỉ lệ',
@@ -240,7 +244,7 @@ export class UI {
       h('div', { class: 'group' }, this.undoBtn, this.redoBtn));
     const br = this.root.querySelector('#bottom-right');
     this.snapChip = h('button', { class: 'chip-snap', 'aria-label': 'Bắt điểm', onclick: (e) => this.toggleSnap(e.currentTarget) }, icon(I.magnet, 14), h('span', { class: 'snap-text' }));
-    br.append(this.snapChip, h('button', { class: 'tb soft', 'aria-label': 'Phím tắt (?)', title: 'Phím tắt — ?', onclick: () => this.openHelp() }, icon(I.help, 16)));
+    br.append(this.snapChip, h('button', { class: 'tb soft', 'aria-label': 'Phím tắt (?)', title: 'Phím tắt — ?', onclick: () => this.openHelp() }, icon(I.help, 22, 'stroke-width="2.2"')));
   }
 
   refreshZoom() { this.zoomLabel.textContent = Math.round(this.app.state.camera.zoom * 100) + '%'; }
@@ -265,6 +269,24 @@ export class UI {
     const types = new Set(sel.length ? sel.map((e) => e.type) : drawingTools.includes(s.tool) ? [s.tool === 'pen' ? 'draw' : s.tool] : []);
     const panel = this.props;
     panel.replaceChildren();
+    if (!sel.length && s.tool === 'eraser') {
+      // Eraser settings: preset sizes plus a slider for fine control.
+      panel.hidden = false;
+      const r = s.eraserSize;
+      const sizeLabel = h('span', { class: 'lbl' }, `Tuỳ chỉnh: ${r * 2} px`);
+      panel.append(
+        h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Cỡ tẩy'),
+          seg([[5, 'Nhỏ'], [12, 'Vừa'], [24, 'Lớn'], [44, 'Rất lớn']], r, (v) => app.setEraserSize(v))),
+        h('div', { class: 'row' }, sizeLabel,
+          h('input', {
+            type: 'range', min: 3, max: 80, step: 1, value: r, 'aria-label': 'Cỡ tẩy',
+            oninput: (e) => { app.setEraserSize(Number(e.target.value), true); sizeLabel.textContent = `Tuỳ chỉnh: ${app.state.eraserSize * 2} px`; },
+            onchange: () => this.refreshProps(),
+          })),
+        h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Chế độ'),
+          h('span', { class: 'muted', style: { fontSize: '12px', lineHeight: '1.5' } }, 'Quẹt qua để xoá cả nét. Giữ Alt khi quẹt để lấy lại. Phím [ và ] để đổi cỡ nhanh.')));
+      return;
+    }
     if (!types.size) { panel.hidden = true; panel.classList.remove('open'); return; }
     panel.hidden = false;
     const cur = sel[0] || s.style;
@@ -396,8 +418,8 @@ export class UI {
       item(I.save, 'Lưu file…', 'Ctrl+S', () => app.saveToFile()),
       item(I.export, 'Xuất ảnh PNG', 'Ctrl+Shift+E', () => app.exportPng()),
       h('div', { class: 'menu-sep' }),
-      item(I.image, 'Chèn ảnh…', '8', () => app.pickAndInsert('image')),
-      item(I.file, 'Chèn PDF…', '9', () => app.pickAndInsert('pdf')),
+      item(I.image, 'Chèn ảnh…', '', () => app.pickAndInsert('image')),
+      item(I.file, 'Chèn PDF…', '', () => app.pickAndInsert('pdf')),
       item(I.grid, app.state.showGrid ? 'Ẩn lưới chấm' : 'Hiện lưới chấm', "Ctrl+'", () => { app.state.showGrid = !app.state.showGrid; app.requestRender(); app.autosave(); }),
       h('div', { class: 'menu-sep' }),
       item(I.help, 'Phím tắt', '?', () => this.openHelp()),
@@ -472,8 +494,8 @@ export class UI {
     const app = this.app;
     const item = (ic, label, k, fn) => h('button', { class: 'menu-item', onclick: () => { this.closePopover(); fn(); } }, icon(ic, 16), label, h('span', { class: 'k' }, k));
     this.openPopover('more', anchor, h('div', { class: 'menu' },
-      item(I.image, 'Chèn ảnh…', '8', () => app.pickAndInsert('image')),
-      item(I.file, 'Chèn PDF…', '9', () => app.pickAndInsert('pdf')),
+      item(I.image, 'Chèn ảnh…', '', () => app.pickAndInsert('image')),
+      item(I.file, 'Chèn PDF…', '', () => app.pickAndInsert('pdf')),
       item(I.laser, 'Bút laser', 'K', () => app.setTool('laser')),
       item(I.hand, 'Kéo mặt giấy', 'H', () => app.setTool('hand')),
     ), 240);
@@ -520,9 +542,12 @@ export class UI {
       ['Giữ công cụ', 'Q'], ['Hoàn tác / Làm lại', 'Ctrl+Z / Ctrl+Y'], ['Nhân bản', 'Ctrl+D'], ['Chọn tất cả', 'Ctrl+A'], ['Xoá', 'Delete'],
       ['Sao chép / Dán', 'Ctrl+C / Ctrl+V'], ['Lưu / Mở', 'Ctrl+S / Ctrl+O'], ['Xuất PNG', 'Ctrl+Shift+E'], ['Phóng to / nhỏ', 'Ctrl+= / Ctrl+-, Ctrl+lăn chuột'],
       ['Về 100%', 'Ctrl+0'], ['Vừa nội dung', 'Shift+1'], ['Đưa lên / xuống', 'Ctrl+] / Ctrl+['], ['Giữ tỉ lệ / khoá góc', 'Shift'], ['Tắt bắt điểm tạm thời', 'Alt'],
-      ['Kết thúc nét nhiều điểm', 'Enter / bấm đúp'],
+      ['Kết thúc nét nhiều điểm', 'Enter / bấm đúp'], ['Đổi cỡ tẩy', '[ / ]'],
     ];
-    this.openDialog('Phím tắt', h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))));
+    this.openDialog('Phím tắt', [
+      h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))),
+      h('p', { class: 'muted', style: { margin: '4px 0 0', fontSize: '11px', textAlign: 'center' } }, 'Synto · © derekdaydoi'),
+    ]);
   }
 
   /** Formula editor. element = existing math element or null; point = world position for a new one. */
