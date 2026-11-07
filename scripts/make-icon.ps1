@@ -17,9 +17,12 @@ Add-Type -AssemblyName PresentationCore, WindowsBase
 $root = Split-Path -Parent $PSScriptRoot
 $src  = Join-Path $root 'brand\synto-logo.webp'
 
-# Ink bounds measured on the 1254x1254 source: whole lockup and the mark alone.
+# Ink bounds measured on the 1254x1254 source: whole lockup, the mark and the wordmark.
 $lockup = @{ X = 175; Y = 510; W = 905; H = 272 }
 $mark   = @{ X = 175; Y = 510; W = 246; H = 272 }
+$word   = @{ X = 468; Y = 510; W = 612; H = 272 }
+# Extra space (in source px) between the mark and "Synto" in the UI logo; the source gap is 48.
+$logoGap = 92
 
 $stream = [IO.File]::OpenRead($src)
 try {
@@ -107,11 +110,28 @@ function Write-Png([string]$path, [byte[]]$bytes) {
   Write-Host "PNG:  $path"
 }
 
+# Lockup rebuilt from the mark and the wordmark with a wider gap between them.
+function Render-Logo([int]$h, [byte]$ink) {
+  $s = $h / $mark.H
+  $mw = [Math]::Round($mark.W * $s); $ww = [Math]::Round($word.W * $s); $gap = [Math]::Round($logoGap * $s)
+  $w = $mw + $gap + $ww
+  $m = Get-Ink $mark $mw $h 0 $ink
+  $t = Get-Ink $word $ww $h 0 $ink
+  $visual = New-Object Windows.Media.DrawingVisual
+  $dc = $visual.RenderOpen()
+  $dc.DrawImage($m, (New-Object Windows.Rect(0, 0, $mw, $h)))
+  $dc.DrawImage($t, (New-Object Windows.Rect(($mw + $gap), 0, $ww, $h)))
+  $dc.Close()
+  $rtb = New-Object Windows.Media.Imaging.RenderTargetBitmap($w, $h, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+  $rtb.Render($visual)
+  return ,(To-Png $rtb)
+}
+
 Write-Ico (Join-Path $root 'host\synto.ico') 'halo'
 Write-Ico (Join-Path $root 'host\synto-on-light.ico') 'light'
 Write-Ico (Join-Path $root 'host\synto-on-dark.ico') 'dark'
 # Logos at 3x of the 28px display height for sharp HiDPI rendering.
-Write-Png (Join-Path $root 'app\assets\logo.png') (Render $lockup 278 84 0 'light')
-Write-Png (Join-Path $root 'app\assets\logo-dark.png') (Render $lockup 278 84 0 'dark')
+Write-Png (Join-Path $root 'app\assets\logo.png') (Render-Logo 84 10)
+Write-Png (Join-Path $root 'app\assets\logo-dark.png') (Render-Logo 84 255)
 Write-Png (Join-Path $root 'app\assets\icon-light.png') (Render $mark 64 64 4 'light')
 Write-Png (Join-Path $root 'app\assets\icon-dark.png') (Render $mark 64 64 4 'dark')

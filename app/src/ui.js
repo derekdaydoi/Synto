@@ -6,7 +6,9 @@ import { SNAP_LABELS } from './snapping.js';
 import { katexHtml } from './mathrender.js';
 import { quickToLatex, applyAutoReplace } from './textinput.js';
 import { pdfCurrentPage } from './elements.js';
-import { setHostTitle } from './storage.js';
+import { setHostTitle, openExternal } from './storage.js';
+
+const REPO_URL = 'https://github.com/derekdaydoi/Synto';
 
 const I = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -42,6 +44,7 @@ const I = {
   grid: 'M4 4h16v16H4zM4 12h16M12 4v16',
   help: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7v.5M12 17h.01',
   front: 'M8 8h12v12H8zM4 4h12v4',
+  github: 'M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2',
   back: 'M4 4h12v12H4zM20 8v12H8',
 };
 
@@ -136,10 +139,8 @@ export class UI {
     const el = this.root.querySelector('#top-left');
     this.menuBtn = h('button', { class: 'tb soft', 'aria-label': 'Menu', title: 'Menu', onclick: () => this.toggleMenu() }, icon(I.menu, 18));
     this.docName = h('span', { class: 'docname' });
-    const brand = h('div', { class: 'brand' },
-      h('img', { class: 'logo', src: 'assets/logo.png', alt: 'Synto', width: 87, height: 26, draggable: 'false' }),
-      h('span', { class: 'credit' }, '© derekdaydoi'));
-    el.append(this.menuBtn, brand, this.docName);
+    const logo = h('img', { class: 'logo', src: 'assets/logo.png', alt: 'Synto', width: 91, height: 26, draggable: 'false' });
+    el.append(this.menuBtn, logo, this.docName);
   }
 
   refreshDocName() {
@@ -423,6 +424,7 @@ export class UI {
       item(I.grid, app.state.showGrid ? 'Ẩn lưới chấm' : 'Hiện lưới chấm', "Ctrl+'", () => { app.state.showGrid = !app.state.showGrid; app.requestRender(); app.autosave(); }),
       h('div', { class: 'menu-sep' }),
       item(I.help, 'Phím tắt', '?', () => this.openHelp()),
+      item(I.github, 'GitHub', '', () => openExternal(REPO_URL)),
       item(I.trash, 'Xoá toàn bộ mặt giấy…', '', () => this.confirm('Xoá toàn bộ mặt giấy?', 'Có thể hoàn tác bằng Ctrl+Z.', 'Xoá hết', () => app.clearCanvas()), 'danger'),
     ), 300);
   }
@@ -544,10 +546,7 @@ export class UI {
       ['Về 100%', 'Ctrl+0'], ['Vừa nội dung', 'Shift+1'], ['Đưa lên / xuống', 'Ctrl+] / Ctrl+['], ['Giữ tỉ lệ / khoá góc', 'Shift'], ['Tắt bắt điểm tạm thời', 'Alt'],
       ['Kết thúc nét nhiều điểm', 'Enter / bấm đúp'], ['Đổi cỡ tẩy', '[ / ]'],
     ];
-    this.openDialog('Phím tắt', [
-      h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))),
-      h('p', { class: 'muted', style: { margin: '4px 0 0', fontSize: '11px', textAlign: 'center' } }, 'Synto · © derekdaydoi'),
-    ]);
+    this.openDialog('Phím tắt', h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))));
   }
 
   /** Formula editor. element = existing math element or null; point = world position for a new one. */

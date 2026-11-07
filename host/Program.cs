@@ -369,6 +369,14 @@ namespace Synto
                         string t = Str(msg, "title");
                         Text = string.IsNullOrEmpty(t) ? "Synto" : (t.Length > 200 ? t.Substring(0, 200) : t);
                         return;
+                    case "openExternal":
+                        // Only the project's GitHub links may leave the app (opened in the default browser).
+                        Uri uri;
+                        string link = Str(msg, "url");
+                        if (Uri.TryCreate(link, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps &&
+                            string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+                            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+                        return;
                     case "flushed":
                         flushed = true;
                         if (closeRequested) BeginInvoke(new Action(Close));

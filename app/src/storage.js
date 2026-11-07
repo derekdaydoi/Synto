@@ -165,6 +165,13 @@ export async function openFile(accept, filterName, extensions) {
   });
 }
 
+/** Open a web link in the user's browser (the desktop host only allows github.com links). */
+export function openExternal(url) {
+  if (!/^https:\/\/github\.com\//.test(url)) return;
+  if (host) host.postMessage({ type: 'openExternal', url });
+  else window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 export function setHostTitle(title) {
   if (host) host.postMessage({ type: 'title', title });
 }
