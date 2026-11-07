@@ -383,6 +383,38 @@ namespace Synto
             ApplyThemeIcons();
         }
 
+        private const int WM_SYSCOMMAND = 0x0112, SC_KEYMENU = 0xF100;
+
+        // Pressing and releasing Alt alone (used in the app to disable snapping) would put the
+        // window into system-menu mode, which swallows every following key (Ctrl+Z, Ctrl+A...).
+        // Ignore the keyboard-triggered menu; Alt+Space (lParam = ' ') still opens the window menu.
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_SYSCOMMAND && ((int)m.WParam & 0xFFF0) == SC_KEYMENU && m.LParam == IntPtr.Zero) return;
+            base.WndProc(ref m);
+        }
+
+        // The WinForms WebView2 control hands keys the page did not consume back to the form;
+        // a lone Alt would then enter menu mode. Swallow it here (the page reads Alt from pointer events).
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if ((keyData & Keys.KeyCode) == Keys.Menu) return true;
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if ((keyData & Keys.KeyCode) == Keys.Menu) return true;
+            return base.ProcessDialogKey(keyData);
+        }
+
+        // If keyboard focus ever lands on the form itself, hand it back to the page.
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            if (web != null && web.CoreWebView2 != null) web.Focus();
+        }
+
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             // SystemEvents is static: always unsubscribe to avoid leaking the form.
@@ -397,6 +429,7 @@ namespace Synto
                 string userData = Path.Combine(Program.DataRoot, "WebView2");
                 CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, userData, null);
                 await web.EnsureCoreWebView2Async(env);
+                SuppressAltMenu();
                 CoreWebView2 core = web.CoreWebView2;
                 // The UI is always light, regardless of the Windows app theme.
                 core.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Light;
@@ -437,6 +470,27 @@ namespace Synto
                 Program.ShowFatal(ex);
                 Close();
             }
+        }
+
+        /// A lone Alt (or F10) inside WebView2 is forwarded to the window as "activate menu", which
+        /// silently steals keyboard input until Alt is pressed again: Ctrl+Z, Ctrl+A... stop working.
+        /// The controller is internal to the WinForms control, so reach it by reflection; mark those
+        /// keys handled. The page still sees Alt through pointer events (used to disable snapping).
+        private void SuppressAltMenu()
+        {
+            try
+            {
+                FieldInfo f = typeof(WebView2).GetField("_coreWebView2Controller", BindingFlags.Instance | BindingFlags.NonPublic);
+                CoreWebView2Controller ctrl = f == null ? null : f.GetValue(web) as CoreWebView2Controller;
+                if (ctrl == null) return;
+                ctrl.AcceleratorKeyPressed += (s, e) =>
+                {
+                    uint vk = e.VirtualKey;
+                    bool menuKey = vk == 0x12 /* VK_MENU */ || vk == 0xA4 || vk == 0xA5 || vk == 0x79 /* VK_F10 */;
+                    if (menuKey) e.Handled = true;
+                };
+            }
+            catch (Exception) { }
         }
 
         private void Post(Dictionary<string, object> msg)

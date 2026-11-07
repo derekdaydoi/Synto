@@ -6,6 +6,10 @@ import { ensureKatexStylesheet } from './mathrender.js';
 import { hasHost } from './storage.js';
 
 const isField = (el) => !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+// Fields where the keyboard types text: app shortcuts must not fire there. Sliders, checkboxes
+// and color pickers are not text fields, so Ctrl+Z / Ctrl+A keep working while they have focus.
+const TEXT_INPUTS = new Set(['text', 'search', 'number', 'email', 'url', 'tel', 'password']);
+const isTextField = (el) => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable || (el.tagName === 'INPUT' && TEXT_INPUTS.has((el.type || 'text').toLowerCase())));
 
 async function start() {
   const root = document.getElementById('app');
@@ -53,8 +57,9 @@ async function start() {
 
   // After clicking a toolbar/bottom button, give keyboard focus back to the canvas so
   // Space (pan) or digit shortcuts never re-trigger the focused button.
-  for (const sel of ['#tools', '#bottom-left', '#bottom-right']) {
-    root.querySelector(sel).addEventListener('click', () => {
+  for (const sel of ['#tools', '#bottom-left', '#bottom-right', '#props', '#top-right']) {
+    root.querySelector(sel).addEventListener('click', (e) => {
+      if (isField(e.target)) return; // sliders, color pickers keep focus while in use
       if (!app.state.editingId && !root.querySelector('.dialog') && !root.querySelector('.popover input:focus')) c.focus({ preventScroll: true });
     });
   }
@@ -127,7 +132,7 @@ async function start() {
 function onKey(e, app, ui) {
   if (e.defaultPrevented) return;
   const dialogOpen = !!app.root.querySelector('.dialog');
-  if (dialogOpen || isField(e.target)) return;
+  if (dialogOpen || isTextField(e.target)) return;
   const ctrl = e.ctrlKey || e.metaKey;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const code = e.code;
