@@ -20,6 +20,11 @@ $site = Join-Path $root 'build\pages'
 if (Test-Path $site) { Remove-Item -Recurse -Force $site }
 New-Item -ItemType Directory -Force $site | Out-Null
 Copy-Item -Recurse -Force (Join-Path $root 'app\*') $site
+# The Windows download linked from the README: <site>/download/Synto.exe
+$exe = Join-Path $root 'dist\Synto.exe'
+if (-not (Test-Path $exe)) { throw 'dist\Synto.exe is missing: run build.ps1 first.' }
+New-Item -ItemType Directory -Force (Join-Path $site 'download') | Out-Null
+Copy-Item -Force $exe (Join-Path $site 'download\Synto.exe')
 # No Jekyll processing: serve every file as-is.
 New-Item -ItemType File -Force (Join-Path $site '.nojekyll') | Out-Null
 

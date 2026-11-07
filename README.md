@@ -1,32 +1,57 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="app/assets/logo-dark.png">
-    <img src="app/assets/logo.png" alt="Synto" width="186">
+    <img src="app/assets/logo.png" alt="Synto" width="300">
   </picture>
 </p>
 
-# Synto
+<p align="center">
+  Ghi chú trên mặt giấy vô tận, nét vẽ tay kiểu Excalidraw, dành cho mọi người:<br>
+  công thức toán, ký hiệu, nét vẽ có bắt điểm, 63 hình phẳng, ảnh và PDF ngay trên canvas.
+</p>
 
-Ghi chú trên mặt giấy vô tận, phong cách vẽ tay giống Excalidraw, dành cho mọi người:
-công thức toán, ký hiệu, nét vẽ có bắt điểm, 63 hình phẳng, ảnh và PDF ngay trên canvas.
-Chữ dùng **Patrick Hand** (viết tay) và **Arial**, cả hai đủ dấu tiếng Việt.
+<p align="center">
+  <a href="https://derekdaydoi.github.io/Synto/download/Synto.exe">
+    <img src="https://img.shields.io/badge/T%E1%BA%A3i%20v%E1%BB%81-Windows%2010%20%2F%2011-111111?style=for-the-badge&logo=windows&logoColor=white" alt="Tải về cho Windows" height="48">
+  </a>
+  &nbsp;
+  <a href="https://derekdaydoi.github.io/Synto/">
+    <img src="https://img.shields.io/badge/D%C3%B9ng%20b%E1%BA%A3n%20web-Tr%C3%ACnh%20duy%E1%BB%87t-ffffff?style=for-the-badge&logo=googlechrome&logoColor=111111&labelColor=ffffff&color=eeeeee" alt="Dùng bản web" height="48">
+  </a>
+</p>
 
-Bản desktop là một file `Synto.exe` (~4 MB) chạy hoàn toàn offline trên Windows 10/11.
-Bản web chạy ngay trên trình duyệt: **https://derekdaydoi.github.io/Synto/**
+<p align="center"><sub>Synto.exe · 64-bit / ARM64 · khoảng 4 MB · chạy offline, không cần tài khoản</sub></p>
 
-© derekdaydoi
+---
 
-## Chạy
+## Ảnh demo
 
-```
-dist\Synto.exe
-```
+<sub>Trang mẫu do bài smoke test tự dựng (<code>tests/e2e-smoke.js</code>).</sub>
 
-Cần Microsoft Edge WebView2 Runtime (có sẵn trên Windows 11; Windows 10 thường đã có qua Edge).
-Nếu thiếu, app sẽ đưa link tải của Microsoft.
+![Synto](docs/screenshots/editor.png)
 
-Dữ liệu tự lưu tại `%LOCALAPPDATA%\Synto` (mỗi thay đổi, sau ~0,4 giây). Lưu ra file
-`.synto` bằng Ctrl+S để mang sang máy khác.
+## Tính năng
+
+- **Mặt giấy vô tận**: kéo, thu phóng (Ctrl + lăn chuột, hai ngón tay), lưới chấm bật/tắt.
+- **63 hình phẳng** trong 7 nhóm (cơ bản, tam giác · tứ giác, đa giác · sao, mũi tên, sơ đồ, chú thích, toán · hình học); đa giác đều và ngôi sao chỉnh được số cạnh, số cánh. Nét phác tay hoặc mượt, tô gạch, chéo hoặc đặc.
+- **Nét vẽ**: đoạn thẳng, gấp khúc, đường cong, cung qua 3 điểm, mũi tên, bút tự do, bút dạ quang.
+- **Bắt điểm tự động**: đỉnh, trung điểm, tâm, giao điểm, chân đường vuông góc, điểm trên cạnh. Giữ Alt để tạm tắt, Shift để khoá góc 15°.
+- **Chữ**: Patrick Hand (viết tay) và Arial, đủ dấu tiếng Việt. Gõ `>=` thành ≥, `\delta` rồi dấu cách thành δ.
+- **Công thức** KaTeX với chế độ gõ nhanh (`sqrt(x)`, `a/b`, `+-`) hoặc LaTeX, kèm bảng ký hiệu.
+- **Ảnh và PDF** trên canvas: kéo thả, dán hoặc mở file. PDF thu phóng, cuộn trong khung, vẽ chú thích lên trang.
+- **Tẩy** kiểu Excalidraw, chỉnh được cỡ. **Bút laser** để trình bày.
+- **Dữ liệu của bạn**: tự lưu trên máy, lưu ra file `.synto`, xuất ảnh PNG.
+
+## Cài đặt
+
+1. Bấm **Tải về** ở trên để tải `Synto.exe`.
+2. Chạy file. Synto hỏi có cài vào máy không: chọn **Yes** để chép vào thư mục chương trình và tạo lối tắt **Synto** trên Desktop và Start Menu; chọn **No** để chạy luôn mà không cài.
+
+File chưa ký số nên Windows SmartScreen có thể cảnh báo: chọn **More info → Run anyway**.
+
+Cần Microsoft Edge WebView2 Runtime (có sẵn trên Windows 11; Windows 10 thường đã có qua Edge). Nếu thiếu, app sẽ đưa link tải của Microsoft.
+
+Ghi chú tự lưu trên máy tại `%LOCALAPPDATA%\Synto`. Lưu ra file `.synto` bằng Ctrl+S để mang sang máy khác. Tải bản mới rồi chạy là cập nhật, ghi chú giữ nguyên.
 
 ## Build
 
@@ -120,3 +145,5 @@ brand/               Logo gốc
 ## Giấy phép
 
 Mã nguồn Synto: chưa chọn giấy phép. Thư viện bên thứ ba: xem [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+© derekdaydoi

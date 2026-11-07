@@ -59,6 +59,8 @@ namespace Synto
                 }
                 if (devFolder == null) { script = null; data = null; }
                 if (data != null) DataRootOverride = data;
+                bool silentInstall = Array.IndexOf(args, "--install") >= 0;
+                if (devFolder == null && Installer.OfferInstall(silentInstall)) return; // the installed copy was started
                 Run(devFolder, script);
             }
             catch (Exception ex)
@@ -191,6 +193,97 @@ namespace Synto
             catch (Exception) { }
             MessageBox.Show("Synto gặp lỗi:\n\n" + ex.Message + "\n\nChi tiết đã ghi vào %LOCALAPPDATA%\\Synto\\error.log",
                 "Synto", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// First-run install for the downloaded exe: copies itself to %LOCALAPPDATA%\Programs\Synto
+    /// and creates Desktop + Start Menu shortcuts. Per-user, no admin rights needed.
+    internal static class Installer
+    {
+        internal static string InstallDir
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Synto"); }
+        }
+
+        internal static string InstalledExe { get { return Path.Combine(InstallDir, "Synto.exe"); } }
+
+        private static string DeclinedMarker { get { return Path.Combine(Program.DataRoot, "portable.txt"); } }
+
+        /// Returns true when the installed copy was launched and this process should exit.
+        /// silent: install without asking (Synto.exe --install).
+        internal static bool OfferInstall(bool silent)
+        {
+            try
+            {
+                string self = Path.GetFullPath(Application.ExecutablePath);
+                if (string.Equals(self, Path.GetFullPath(InstalledExe), StringComparison.OrdinalIgnoreCase)) return false;
+                if (!silent && File.Exists(DeclinedMarker)) return false;
+                bool update = File.Exists(InstalledExe);
+                string text = update
+                    ? "Synto đã được cài trên máy. Cập nhật bản đã cài bằng bản này?\n\nGhi chú của bạn được giữ nguyên."
+                    : "Cài Synto vào máy?\n\nSynto sẽ được chép vào thư mục chương trình của bạn và tạo lối tắt trên Desktop và Start Menu. Không cần quyền quản trị.\n\nChọn \"No\" để chạy luôn mà không cài.";
+                DialogResult r = silent ? DialogResult.Yes : MessageBox.Show(text, "Synto", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (r == DialogResult.Cancel) return true; // user backed out: start nothing
+                if (r == DialogResult.No)
+                {
+                    if (!update)
+                    {
+                        Directory.CreateDirectory(Program.DataRoot);
+                        File.WriteAllText(DeclinedMarker, "Run without installing. Delete this file to be asked again.");
+                    }
+                    return false;
+                }
+                Directory.CreateDirectory(InstallDir);
+                CloseRunningInstalledCopy();
+                string temp = InstalledExe + ".new";
+                File.Copy(self, temp, true);
+                if (File.Exists(InstalledExe)) File.Replace(temp, InstalledExe, null);
+                else File.Move(temp, InstalledExe);
+                CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Synto.lnk"));
+                CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Synto.lnk"));
+                Process.Start(new ProcessStartInfo(InstalledExe) { UseShellExecute = true, WorkingDirectory = InstallDir });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không cài được Synto: " + ex.Message + "\n\nSynto sẽ chạy mà không cài.", "Synto", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+        }
+
+        private static void CloseRunningInstalledCopy()
+        {
+            foreach (Process p in Process.GetProcessesByName("Synto"))
+            {
+                try
+                {
+                    if (p.Id == Process.GetCurrentProcess().Id) continue;
+                    if (!string.Equals(p.MainModule.FileName, InstalledExe, StringComparison.OrdinalIgnoreCase)) continue;
+                    p.CloseMainWindow(); // the app saves its notes before closing
+                    if (!p.WaitForExit(6000)) p.Kill();
+                }
+                catch (Exception) { }
+            }
+        }
+
+        /// Creates a .lnk through the WScript.Shell COM object (late-bound, no extra references).
+        private static void CreateShortcut(string path)
+        {
+            Type t = Type.GetTypeFromProgID("WScript.Shell");
+            if (t == null) return;
+            object shell = Activator.CreateInstance(t);
+            try
+            {
+                object lnk = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
+                Type lt = lnk.GetType();
+                lt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, lnk, new object[] { InstalledExe });
+                lt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { InstallDir });
+                lt.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Synto - ghi chú trên mặt giấy vô tận" });
+                lt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, lnk, new object[] { InstalledExe + ",0" });
+                lt.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
+                Marshal.FinalReleaseComObject(lnk);
+            }
+            finally { Marshal.FinalReleaseComObject(shell); }
         }
     }
 
