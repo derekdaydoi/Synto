@@ -424,7 +424,7 @@ export class UI {
       h('div', { class: 'menu-sep' }),
       item(I.help, 'Phím tắt', '?', () => this.openHelp()),
       item(I.trash, 'Xoá toàn bộ mặt giấy…', '', () => this.confirm('Xoá toàn bộ mặt giấy?', 'Có thể hoàn tác bằng Ctrl+Z.', 'Xoá hết', () => app.clearCanvas()), 'danger'),
-    ), 260);
+    ), 300);
   }
 
   toggleShapes(anchor) {

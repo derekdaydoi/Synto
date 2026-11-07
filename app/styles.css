@@ -99,7 +99,7 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 /* Popovers, dialogs */
 .layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
 .popover { position: absolute; pointer-events: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg);
-  padding: 12px; max-height: calc(100% - 100px); overflow: auto; user-select: none; }
+  padding: 12px; max-height: calc(100% - 100px); overflow-x: hidden; overflow-y: auto; user-select: none; }
 .popover h3 { margin: 0 0 8px; font-size: 13px; }
 .popover .search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; background: #f6f6f6; border-radius: 8px; color: var(--muted); }
 .popover .search input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; color: var(--ink); user-select: text; }
@@ -113,7 +113,7 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
 .tile.on { background: var(--ink); color: #fff; }
 .tile span { font-size: 10px; color: var(--sub); line-height: 1.35; padding-bottom: 1px; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile.on span { color: #ddd; }
-.menu { display: flex; flex-direction: column; min-width: 240px; }
+.menu { display: flex; flex-direction: column; min-width: 0; }
 .menu-item { display: flex; align-items: center; gap: 10px; height: 36px; border: 0; background: transparent; border-radius: 8px; padding: 0 10px; text-align: left; width: 100%; }
 .menu-item:hover { background: var(--hover); }
 .menu-item .k { margin-left: auto; font-size: 11px; color: var(--muted); }
