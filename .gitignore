@@ -1,0 +1,18 @@
+# Build outputs
+/dist/
+/build/
+
+# Third-party code fetched by scripts/fetch-deps.ps1 (pinned + hash-checked)
+/app/vendor/
+/app/fonts/PatrickHand-Regular.ttf
+
+# Generated from brand/synto-logo.webp by scripts/make-icon.ps1
+# (kept in git so the app runs without building; regenerate after a logo change)
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+.vscode/
+.idea/

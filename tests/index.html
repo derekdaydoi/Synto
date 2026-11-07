@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Synto tests</title>
+  <style>
+    body { font: 13px/1.5 "Segoe UI", system-ui, sans-serif; margin: 24px; color: #0a0a0a; }
+    .pass { color: #2b8a3e; } .fail { color: #c92a2a; font-weight: 600; }
+    pre { white-space: pre-wrap; background: #fafafa; padding: 8px; border-radius: 6px; }
+    #summary { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+  </style>
+  <link rel="stylesheet" href="../app/styles.css" media="print">
+  <script src="../app/vendor/katex/katex.min.js"></script>
+</head>
+<body>
+  <div id="summary">Đang chạy…</div>
+  <div id="out"></div>
+  <script type="module" src="./run.js"></script>
+</body>
+</html>
