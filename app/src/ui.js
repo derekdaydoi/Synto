@@ -140,16 +140,14 @@ export class UI {
   buildTopLeft() {
     const el = this.root.querySelector('#top-left');
     this.menuBtn = h('button', { class: 'tb soft', 'aria-label': 'Menu', title: 'Menu', onclick: () => this.toggleMenu() }, icon(I.menu, 18));
-    this.docName = h('span', { class: 'docname' });
     const logo = h('img', { class: 'logo', src: 'assets/logo.png', alt: 'Synto', width: 91, height: 26, draggable: 'false' });
-    el.append(this.menuBtn, logo, this.docName);
+    el.append(this.menuBtn, logo);
   }
 
+  // The window title and the top bar always show just "Synto", never the file name.
   refreshDocName() {
-    const n = this.app.state.fileName;
-    this.docName.textContent = n ? '/ ' + n : '';
-    document.title = n ? `${n} — Synto` : 'Synto';
-    setHostTitle(document.title);
+    document.title = 'Synto';
+    setHostTitle('Synto');
   }
 
   // ---------- toolbar ----------

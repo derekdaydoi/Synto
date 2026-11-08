@@ -18,7 +18,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 [assembly: AssemblyTitle("Synto")]
 [assembly: AssemblyProduct("Synto")]
-[assembly: AssemblyDescription("Synto - ghi chú trên mặt giấy vô tận")]
+[assembly: AssemblyDescription("Synto")]
 [assembly: AssemblyVersion("0.1.0.0")]
 [assembly: AssemblyFileVersion("0.1.0.0")]
 
@@ -278,7 +278,7 @@ namespace Synto
                 Type lt = lnk.GetType();
                 lt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, lnk, new object[] { InstalledExe });
                 lt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { InstallDir });
-                lt.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Synto - ghi chú trên mặt giấy vô tận" });
+                lt.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Synto" });
                 lt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, lnk, new object[] { InstalledExe + ",0" });
                 lt.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
                 Marshal.FinalReleaseComObject(lnk);
