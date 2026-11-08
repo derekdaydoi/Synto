@@ -116,6 +116,19 @@ test('mindmap: Space adds a sibling under the node with the same parent', () => 
   ok(!lone.elements.some((e) => e.type === 'line'), 'a root sibling has no branch');
 });
 
+test('mindmap: a new main branch goes below the previous branch subtree (no interleaving)', () => {
+  const root = centralTopic(DEFAULT_STYLE, [0, 0]);
+  let r = addChild([root], root, DEFAULT_STYLE, 'A');
+  const a = r.node;
+  let els = r.elements;
+  for (const k of ['a1', 'a2', 'a3']) els = addChild(els, els.find((e) => e.id === a.id), DEFAULT_STYLE, k).elements;
+  const lowestA = Math.max(...els.filter((e) => e.parentId === a.id).map((e) => getBounds(e).maxY));
+  r = addChild(els, root, DEFAULT_STYLE, 'B');
+  ok(r.node.y >= lowestA, 'B starts below all of A\'s children');
+  const s = addSibling(els, a, DEFAULT_STYLE, 'A2');
+  ok(s.node.y >= lowestA, 'a sibling of A also clears A\'s subtree');
+});
+
 test('mindmap: sibling skips over existing boxes in the way', () => {
   const a = withLabel(box(0, 0, 100, 40, { topic: true }), 'A');
   const blockerBox = box(0, 60, 100, 40);

@@ -321,11 +321,36 @@ export class Renderer {
       ctx.fillRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
       ctx.strokeRect(Math.min(a[0], b[0]) + 0.5, Math.min(a[1], b[1]) + 0.5, Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
     }
-    if (view.eraserTrail && view.eraserTrail.length > 1) this.drawTrail(view.eraserTrail.map(S), 'rgba(120,120,120,', view.eraserWidth || 10);
+    if (view.eraserTrail && view.eraserTrail.length > 1) this.drawEraserTrail(view.eraserTrail.map(S), view.eraserWidth || 10);
     if (view.laser && view.laser.points.length) this.drawLaser(view.laser, S);
     if (view.eraserCursor) this.drawEraserCursor(view.eraserCursor.p, view.eraserCursor.r);
     if (view.laserDot) this.drawLaserDot(view.laserDot, 1);
     if (view.snap) this.drawSnap(S(view.snap.point), view.snap.label);
+  }
+
+  /**
+   * Eraser trail: a light, tapered stroke (thin at the tail). Segments meet at midpoints with
+   * butt caps so translucent pieces never overlap into dark blobs.
+   */
+  drawEraserTrail(pts, eraserWidth) {
+    const { ctx } = this;
+    const maxW = Math.min(18, Math.max(4, eraserWidth * 0.45));
+    ctx.save();
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(130,130,130,0.22)';
+    for (let i = 1; i < pts.length; i++) {
+      const t = i / pts.length;
+      ctx.lineWidth = maxW * (0.15 + 0.85 * t);
+      const p0 = pts[i - 1], p1 = pts[i];
+      const pm = i > 1 ? [(pts[i - 2][0] + p0[0]) / 2, (pts[i - 2][1] + p0[1]) / 2] : p0;
+      const pn = i === pts.length - 1 ? p1 : [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+      ctx.beginPath();
+      ctx.moveTo(pm[0], pm[1]);
+      ctx.quadraticCurveTo(p0[0], p0[1], pn[0], pn[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawEraserCursor(p, r) {
@@ -471,21 +496,6 @@ export class Renderer {
       ctx.fill();
       ctx.stroke();
       ctx.restore();
-    }
-  }
-
-  drawTrail(pts, rgbaPrefix, width) {
-    const { ctx } = this;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (let i = 1; i < pts.length; i++) {
-      const t = i / pts.length;
-      ctx.strokeStyle = rgbaPrefix + (0.15 + 0.5 * t) + ')';
-      ctx.lineWidth = width * (0.3 + 0.7 * t);
-      ctx.beginPath();
-      ctx.moveTo(pts[i - 1][0], pts[i - 1][1]);
-      ctx.lineTo(pts[i][0], pts[i][1]);
-      ctx.stroke();
     }
   }
 

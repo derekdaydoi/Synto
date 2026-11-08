@@ -11,6 +11,23 @@ const PAD = 8; // extra clearance when avoiding overlaps
 
 const childrenOf = (elements, id) => elements.filter((e) => e.parentId === id);
 
+/** Bottom edge of a node's whole subtree (the node and all its descendants). */
+function subtreeBottom(elements, node) {
+  let bottom = rectOf(node).maxY;
+  const seen = new Set([node.id]);
+  const stack = [node.id];
+  while (stack.length) {
+    const id = stack.pop();
+    for (const k of childrenOf(elements, id)) {
+      if (seen.has(k.id)) continue; // guard against parent cycles in hand-edited files
+      seen.add(k.id);
+      bottom = Math.max(bottom, rectOf(k).maxY);
+      stack.push(k.id);
+    }
+  }
+  return bottom;
+}
+
 function rectOf(el) {
   const b = getBounds(el);
   return { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY };
@@ -84,8 +101,9 @@ export function addChild(elements, parent, style, label = 'Chủ đề con') {
   if (!kids.length) {
     y = (pb.minY + pb.maxY) / 2 - node.h / 2;
   } else {
+    // Below the previous children's whole subtrees, so branches never interleave.
     x = Math.min(...kids.map((k) => k.x));
-    y = Math.max(...kids.map((k) => rectOf(k).maxY)) + GAP_Y;
+    y = Math.max(...kids.map((k) => subtreeBottom(elements, k))) + GAP_Y;
   }
   y = findFreeY(elements, x, y, node.w, node.h, new Set([parent.id]));
   node = updateElement(node, { x, y });
@@ -104,9 +122,8 @@ export function addSibling(elements, node, style, label = 'Chủ đề') {
   if (parent) sib = updateElement(sib, { parentId: parent.id, fontSize: node.fontSize, font: node.font });
   else sib = updateElement(sib, { shapeId: node.type === 'shape' ? node.shapeId : sib.shapeId, fontSize: node.fontSize || sib.fontSize, strokeColor: node.strokeColor, strokeWidth: node.strokeWidth });
   sib = withLabel(sib, label);
-  const nb = rectOf(node);
   const x = node.x;
-  const y = findFreeY(elements, x, nb.maxY + GAP_Y, sib.w, sib.h, new Set());
+  const y = findFreeY(elements, x, subtreeBottom(elements, node) + GAP_Y, sib.w, sib.h, new Set());
   sib = updateElement(sib, { x, y });
   const added = parent ? [connector(style, parent, sib)] : [];
   return { elements: [...added, ...elements, sib], node: sib };

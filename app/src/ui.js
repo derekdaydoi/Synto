@@ -339,7 +339,7 @@ export class UI {
       panel.append(row('Cỡ chữ', seg([[16, 'S'], [20, 'M'], [26, 'L'], [36, 'XL']], val('fontSize'), (v) => app.setStyle({ fontSize: v }))));
       if (has('text')) panel.append(row('Căn chữ', seg([['left', 'Trái'], ['center', 'Giữa'], ['right', 'Phải']], val('align'), (v) => app.setStyle({ align: v }))));
     }
-    if (sel.length === 1 && sel[0].type !== 'line' && sel[0].type !== 'draw') {
+    if (sel.length === 1 && sel[0].type === 'shape') {
       panel.append(row('Sơ đồ tư duy', h('div', { class: 'line' },
         h('button', { class: 'pb', title: 'Thêm nhánh con (Tab)', onclick: () => app.addChildTopic() }, '+ Nhánh con'),
         h('button', { class: 'pb', title: 'Thêm nhánh ngang hàng (Space)', onclick: () => app.addSiblingTopic() }, '+ Ngang hàng'))));
