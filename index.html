@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'">
+  <!-- The UI is always light: opt out of dark color schemes and browser auto-dark. -->
+  <meta name="color-scheme" content="only light">
+  <title>Synto</title>
+  <!-- Tab icon follows the browser chrome: dark mark on light tabs, light mark on dark tabs. -->
+  <link rel="icon" type="image/png" href="assets/icon-light.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" href="assets/icon-dark.png" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" id="katex-css" href="vendor/katex/katex.min.css">
+  <script src="vendor/katex/katex.min.js" defer></script>
+  <script type="module" src="src/main.js"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <canvas id="canvas" class="canvas" tabindex="0" aria-label="Mặt giấy vẽ"></canvas>
+    <textarea id="text-editor" class="text-editor" spellcheck="false" hidden aria-label="Sửa chữ"></textarea>
+
+    <div class="top-l" id="top-left"></div>
+    <div class="tools" id="tools"></div>
+    <div class="top-r" id="top-right"></div>
+    <section class="props isl" id="props" aria-label="Thuộc tính" hidden></section>
+    <div class="bl" id="bottom-left"></div>
+    <div class="br" id="bottom-right"></div>
+    <div class="empty-hint" id="empty-hint" hidden>
+      <img src="assets/logo.png" alt="Synto" width="147" height="42">
+      <p>Ghi chú trên mặt giấy vô tận. Chọn một công cụ ở thanh phía trên để bắt đầu.</p>
+      <p class="muted">Kéo thả ảnh hoặc PDF vào đây để chèn.</p>
+    </div>
+    <div class="drop-overlay" id="drop-overlay" hidden><div>Thả để chèn ảnh hoặc PDF</div></div>
+    <div id="layer" class="layer"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <noscript>Synto cần JavaScript để chạy.</noscript>
+  </div>
+</body>
+</html>
