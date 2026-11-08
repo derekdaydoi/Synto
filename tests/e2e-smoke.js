@@ -60,7 +60,7 @@
     app.setStyle({ strokeColor: '#0a0a0a', strokeStyle: 'solid' });
 
     // Shapes from the library.
-    const shape = async (id, a, b, style) => { if (style) app.setStyle(style); app.setTool('shape', { shapeId: id }); await drag(a, b); };
+    const shape = async (id, a, b, style) => { if (style) app.setStyle(style); app.state.tool = 'shape'; app.state.shapeId = id; await drag(a, b); };
     await shape('hexagon', [520, 380], [660, 490], { fillColor: '#a5d8ff', fillStyle: 'hachure' });
     app.state.shapeParams.points = 5;
     await shape('star', [700, 370], [820, 490], { fillColor: '#ffec99', fillStyle: 'solid' });

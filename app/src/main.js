@@ -228,9 +228,7 @@ function onKey(e, app, ui) {
   if (digit) {
     const n = +digit[1];
     if (tools[n]) { app.setTool(tools[n], n === 4 ? { penMode: 'pen' } : {}); return; }
-    if (n === 2) { if (app.state.tool === 'shape') ui.toggleShapes(ui.toolButtons.shape); else app.setTool('shape'); return; }
     if (n === 3) { if (app.state.tool === 'line') ui.toggleLines(ui.toolButtons.line); else app.setTool('line'); return; }
-    if (n === 6) { app.setTool('math'); ui.openMathEditor(null, null); return; }
     if (n === 7) { ui.toggleSymbols(ui.toolButtons.symbol); return; }
     if (n === 8) { app.pickAndInsert('image'); return; }
     if (n === 9) { app.pickAndInsert('pdf'); return; }
@@ -241,7 +239,6 @@ function onKey(e, app, ui) {
     case 'p': app.setTool('pen', { penMode: e.shiftKey ? 'highlighter' : 'pen' }); break;
     case 't': app.setTool('text'); break;
     case 'n': app.setTool('mindmap'); break;
-    case 'm': app.setTool('math'); ui.openMathEditor(null, null); break;
     case 'e': app.setTool('eraser'); break;
     case 'k': app.setTool('laser'); break;
     case 'l': app.setTool('line', { lineKind: e.shiftKey ? 'polyline' : 'segment' }); break;

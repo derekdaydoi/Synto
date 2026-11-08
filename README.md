@@ -7,7 +7,7 @@
 
 <p align="center">
   Ghi chú trên mặt giấy vô tận, nét vẽ tay kiểu Excalidraw, dành cho mọi người:<br>
-  công thức toán, ký hiệu, nét vẽ có bắt điểm, 63 hình phẳng, ảnh và PDF ngay trên canvas.
+  ký hiệu, nét vẽ có bắt điểm, sơ đồ tư duy, ảnh và PDF ngay trên canvas.
 </p>
 
 <p align="center">
@@ -33,12 +33,11 @@
 ## Tính năng
 
 - **Mặt giấy vô tận**: kéo, thu phóng (Ctrl + lăn chuột, hai ngón tay), lưới chấm bật/tắt.
-- **63 hình phẳng** trong 7 nhóm (cơ bản, tam giác · tứ giác, đa giác · sao, mũi tên, sơ đồ, chú thích, toán · hình học); đa giác đều và ngôi sao chỉnh được số cạnh, số cánh. Nét phác tay hoặc mượt, tô gạch, chéo hoặc đặc.
 - **Nét vẽ**: đoạn thẳng, gấp khúc, đường cong, cung qua 3 điểm, mũi tên, bút tự do, bút dạ quang.
 - **Bắt điểm tự động**: đỉnh, trung điểm, tâm, giao điểm, chân đường vuông góc, điểm trên cạnh. Giữ Alt để tạm tắt, Shift để khoá góc 15°.
 - **Sơ đồ tư duy** kiểu XMind: chủ đề là hộp có chữ (có viền hoặc không viền), nối bằng đường gắn vào hộp, kéo hộp thì đường đi theo, mỗi đầu đường chọn được mũi tên. Chọn một chủ đề: **Tab** thêm nhánh con, **Space** (nhấn nhả) hoặc **Enter** thêm nhánh ngang hàng, **F2** sửa chữ. Chữ cũng đặt được vào trong mọi hình học (bấm đúp vào hình).
 - **Chữ**: Patrick Hand (viết tay) và Arial, đủ dấu tiếng Việt. Gõ `>=` thành ≥, `\delta` rồi dấu cách thành δ.
-- **Công thức** KaTeX với chế độ gõ nhanh (`sqrt(x)`, `a/b`, `+-`) hoặc LaTeX, kèm bảng ký hiệu.
+- **Phím tắt**: Ctrl+A chọn toàn bộ, Ctrl+Z hoàn tác (giữ để lùi liên tục), Ctrl+Y làm lại.
 - **Ảnh và PDF** trên canvas: kéo thả, dán hoặc mở file. PDF thu phóng, cuộn trong khung, vẽ chú thích lên trang.
 - **Tẩy** kiểu Excalidraw, chỉnh được cỡ. **Bút laser** để trình bày.
 - **Dữ liệu của bạn**: tự lưu trên máy, lưu ra file `.synto` (Ctrl+S), **Xuất PDF** (nút góc phải, Ctrl+P) hoặc ảnh PNG.
@@ -101,7 +100,7 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-pages.ps1
 app/                 Ứng dụng web (HTML/CSS/JS thuần, ES modules, không cần bundler)
   src/main.js        Khởi động, nối sự kiện DOM
   src/app.js         Bộ điều khiển: công cụ, chuột/bút/cảm ứng, clipboard, file, lưu tự động
-  src/ui.js          Thanh công cụ, bảng thuộc tính, thư viện hình, ký hiệu, khung công thức
+  src/ui.js          Thanh công cụ, bảng thuộc tính, ký hiệu, khung sửa công thức
   src/renderer.js    Vẽ canvas (roughjs cho nét phác tay, perfect-freehand cho bút)
   src/elements.js    Mô hình phần tử (bất biến), hit test, kiểm tra dữ liệu nhập
   src/shapelib.js    63 hình phẳng (đường SVG trong hộp 24×24) + đa giác/sao có tham số

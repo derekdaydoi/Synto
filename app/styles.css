@@ -146,7 +146,6 @@ kbd { font: inherit; font-size: 11px; border: 1px solid #e0e0e0; border-radius: 
   .status { display: none; }
 }
 @media (max-width: 959px) {
-  .t-extra { display: none; }
   .hint { display: none; }
 }
 @media (max-width: 789px) {

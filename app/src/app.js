@@ -25,7 +25,8 @@ const SNAP_RADIUS = 12; // screen px
 const IMAGE_MIME = /^image\/(png|jpeg|gif|webp|svg\+xml)$/;
 const LASER_LIFE = 900; // ms a laser trail point stays visible
 
-export const TOOLS = ['hand', 'select', 'shape', 'line', 'pen', 'text', 'mindmap', 'math', 'eraser', 'laser'];
+// Shapes and formulas have no tool any more; existing ones still render and edit.
+export const TOOLS = ['hand', 'select', 'line', 'pen', 'text', 'mindmap', 'eraser', 'laser'];
 
 export class App {
   constructor(root) {

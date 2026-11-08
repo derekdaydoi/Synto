@@ -1,7 +1,7 @@
 // DOM user interface around the canvas: toolbar, properties, popovers, dialogs.
 
 import { h, icon } from './util.js';
-import { SHAPE_GROUPS, SHAPES, designPath } from './shapelib.js';
+import { SHAPES } from './shapelib.js';
 import { SNAP_LABELS } from './snapping.js';
 import { katexHtml } from './mathrender.js';
 import { quickToLatex, applyAutoReplace } from './textinput.js';
@@ -82,23 +82,6 @@ const SYMBOL_LATEX = {
   '□': '\\square', '○': '\\circ', '⊙': '\\odot',
 };
 
-function shapeIcon(id, size = 22, params) {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('viewBox', '0 0 24 24');
-  s.setAttribute('width', size);
-  s.setAttribute('height', size);
-  s.setAttribute('aria-hidden', 'true');
-  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  p.setAttribute('d', designPath(id, params));
-  p.setAttribute('fill', 'none');
-  p.setAttribute('stroke', 'currentColor');
-  p.setAttribute('stroke-width', '1.6');
-  p.setAttribute('stroke-linecap', 'round');
-  p.setAttribute('stroke-linejoin', 'round');
-  s.appendChild(p);
-  return s;
-}
-
 export class UI {
   constructor(app) {
     this.app = app;
@@ -165,22 +148,19 @@ export class UI {
     this.toolButtons = {
       hand: T('hand', 'Kéo', I.hand, 'H'),
       select: T('select', 'Chọn', I.select, '1'),
-      shape: T('shape', 'Hình khối', I.hex, '2', { wide: true, onclick: (e) => this.toggleShapes(e.currentTarget) }),
       line: T('line', 'Nét', I.curve, '3', { wide: true, onclick: (e) => this.toggleLines(e.currentTarget) }),
       pen: T('pen', 'Bút', I.pen, '4', { onclick: () => this.app.setTool('pen', { penMode: 'pen' }) }),
       text: T('text', 'Chữ', I.text, '5'),
       mindmap: T('mindmap', 'Sơ đồ tư duy', I.mindmap, 'N'),
-      math: T('math', 'Công thức', h('span', { class: 'glyph' }, '∑'), '6', { onclick: () => { this.app.setTool('math'); this.openMathEditor(null, null); } }),
       symbol: T('symbol', 'Ký hiệu', h('span', { class: 'glyph' }, 'Ω'), '7', { onclick: (e) => this.toggleSymbols(e.currentTarget) }),
-      image: T('image', 'Chèn ảnh', I.image, '8', { cls: 't-extra', onclick: () => this.app.pickAndInsert('image') }),
-      file: T('file', 'Chèn PDF', I.file, '9', { cls: 't-extra', onclick: () => this.app.pickAndInsert('pdf') }),
+      image: T('image', 'Chèn ảnh', I.image, '8', { onclick: () => this.app.pickAndInsert('image') }),
+      file: T('file', 'Chèn PDF', I.file, '9', { onclick: () => this.app.pickAndInsert('pdf') }),
       eraser: T('eraser', 'Tẩy', I.eraser, '0'),
-      laser: T('laser', 'Bút laser', I.laser, 'K', { cls: 't-extra' }),
+      laser: T('laser', 'Bút laser', I.laser, 'K'),
     };
-    const moreBtn = h('button', { class: 'tb', 'aria-label': 'Thêm công cụ', title: 'Thêm', onclick: (e) => this.toggleMore(e.currentTarget) }, icon(I.more, 19, 'stroke-width="3"'));
     const tb = this.toolButtons;
-    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.shape, tb.line, tb.pen, tb.text, tb.mindmap, tb.math, tb.symbol, tb.image, tb.file, tb.eraser,
-      h('span', { class: 'sep t-extra' }), tb.laser, moreBtn);
+    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.line, tb.pen, tb.text, tb.mindmap, tb.symbol, tb.image, tb.file, tb.eraser,
+      h('span', { class: 'sep' }), tb.laser);
     this.hint = h('span', { class: 'hint' });
     host.append(bar, this.hint);
   }
@@ -192,9 +172,7 @@ export class UI {
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
-    // Shape / line buttons show the current choice.
-    const shapeBtn = this.toolButtons.shape;
-    shapeBtn.replaceChild(shapeIcon(s.shapeId, 19, s.shapeParams), shapeBtn.firstChild);
+    // The line button shows the current choice.
     const lineIcons = { segment: I.segment, polyline: I.polyline, curve: I.curve, arc: I.arc };
     const lineBtn = this.toolButtons.line;
     const lic = s.tool === 'pen' && s.penMode === 'highlighter' ? I.highlighter : lineIcons[s.lineKind] || I.curve;
@@ -441,36 +419,6 @@ export class UI {
     ), 300);
   }
 
-  toggleShapes(anchor) {
-    const app = this.app;
-    let filter = '';
-    let tab = 'Tất cả';
-    const body = h('div');
-    const draw = () => {
-      body.replaceChildren();
-      const q = filter.trim().toLowerCase().normalize('NFC');
-      for (const g of SHAPE_GROUPS) {
-        if (tab !== 'Tất cả' && g.name !== tab) continue;
-        const items = g.items.filter((s) => !q || s.n.toLowerCase().includes(q) || g.name.toLowerCase().includes(q));
-        if (!items.length) continue;
-        body.append(h('div', { class: 'group-title' }, g.name), h('div', { class: 'tiles' }, items.map((s) => h('button', {
-          class: 'tile' + (app.state.shapeId === s.id && app.state.tool === 'shape' ? ' on' : ''), title: s.n, 'aria-label': s.n,
-          onclick: () => { app.setTool('shape', { shapeId: s.id }); this.closePopover(); },
-        }, shapeIcon(s.id, 24, app.state.shapeParams), h('span', null, s.n)))));
-      }
-      if (!body.childNodes.length) body.append(h('p', { class: 'muted' }, 'Không có hình nào khớp.'));
-    };
-    const tabs = h('div', { class: 'tabs' });
-    const drawTabs = () => {
-      tabs.replaceChildren(...['Tất cả', ...SHAPE_GROUPS.map((g) => g.name)].map((n) => h('button', { class: 'tab' + (tab === n ? ' on' : ''), onclick: () => { tab = n; drawTabs(); draw(); } }, n)));
-    };
-    drawTabs();
-    draw();
-    const search = h('input', { placeholder: 'Tìm hình: thang, mũi tên, sao…', 'aria-label': 'Tìm hình', oninput: (e) => { filter = e.target.value; draw(); } });
-    const pop = this.openPopover('shapes', anchor, [h('div', { class: 'search' }, icon('M11 5a6 6 0 1 0 .01 0M20 20l-4-4', 14), search), tabs, body], 560);
-    if (pop) setTimeout(() => search.focus(), 0);
-  }
-
   toggleLines(anchor) {
     const app = this.app;
     const item = (ic, label, k, fn, on) => h('button', { class: 'menu-item' + (on ? ' on' : ''), style: on ? { background: '#0a0a0a', color: '#fff' } : {}, onclick: () => { fn(); this.closePopover(); } }, icon(ic, 18), label, h('span', { class: 'k' }, k));
@@ -502,17 +450,6 @@ export class UI {
     const drawTabs = () => tabs.replaceChildren(...['Tất cả', ...SYMBOL_GROUPS.map((g) => g.name)].map((n) => h('button', { class: 'tab' + (tab === n ? ' on' : ''), onclick: () => { tab = n; drawTabs(); draw(); } }, n)));
     drawTabs(); draw();
     this.openPopover(onPick ? 'symbols-math' : 'symbols', anchor, [h('h3', null, 'Ký hiệu'), h('p', { class: 'muted', style: { margin: '0 0 4px', fontSize: '11px' } }, 'Hoặc gõ \\tên rồi dấu cách trong ô chữ, ví dụ \\delta → δ'), tabs, body], 420);
-  }
-
-  toggleMore(anchor) {
-    const app = this.app;
-    const item = (ic, label, k, fn) => h('button', { class: 'menu-item', onclick: () => { this.closePopover(); fn(); } }, icon(ic, 16), label, h('span', { class: 'k' }, k));
-    this.openPopover('more', anchor, h('div', { class: 'menu' },
-      item(I.image, 'Chèn ảnh…', '', () => app.pickAndInsert('image')),
-      item(I.file, 'Chèn PDF…', '', () => app.pickAndInsert('pdf')),
-      item(I.laser, 'Bút laser', 'K', () => app.setTool('laser')),
-      item(I.hand, 'Kéo mặt giấy', 'H', () => app.setTool('hand')),
-    ), 240);
   }
 
   toggleSnap(anchor) {
@@ -551,8 +488,8 @@ export class UI {
 
   openHelp() {
     const rows = [
-      ['Chọn', '1 / V'], ['Kéo mặt giấy', 'H hoặc giữ Space'], ['Hình khối', '2'], ['Nét', '3'], ['Bút', '4 / P'], ['Bút dạ quang', 'Shift+P'],
-      ['Chữ', '5 / T'], ['Công thức', '6 / M'], ['Ký hiệu', '7'], ['Chèn ảnh', '8'], ['Chèn PDF', '9'], ['Tẩy', '0 / E'], ['Laser', 'K'],
+      ['Chọn', '1 / V'], ['Kéo mặt giấy', 'H hoặc giữ Space'], ['Nét', '3'], ['Bút', '4 / P'], ['Bút dạ quang', 'Shift+P'],
+      ['Chữ', '5 / T'], ['Ký hiệu', '7'], ['Chèn ảnh', '8'], ['Chèn PDF', '9'], ['Tẩy', '0 / E'], ['Laser', 'K'],
       ['Giữ công cụ', 'Q'], ['Hoàn tác / Làm lại', 'Ctrl+Z / Ctrl+Y'], ['Nhân bản', 'Ctrl+D'], ['Chọn tất cả', 'Ctrl+A'], ['Xoá', 'Delete'],
       ['Sao chép / Dán', 'Ctrl+C / Ctrl+V'], ['Lưu / Mở', 'Ctrl+S / Ctrl+O'], ['Xuất PNG', 'Ctrl+Shift+E'], ['Phóng to / nhỏ', 'Ctrl+= / Ctrl+-, Ctrl+lăn chuột'],
       ['Về 100%', 'Ctrl+0'], ['Vừa nội dung', 'Shift+1'], ['Đưa lên / xuống', 'Ctrl+] / Ctrl+['], ['Giữ tỉ lệ / khoá góc', 'Shift'], ['Tắt bắt điểm tạm thời', 'Alt'],

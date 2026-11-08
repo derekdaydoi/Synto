@@ -23,6 +23,7 @@ public static class Shot {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
 }
 "@
@@ -40,7 +41,10 @@ foreach ($scene in $scenes) {
   $run = Join-Path $work 'run.js'
   [IO.File]::WriteAllText($run, $helpers + "`n" + (Get-Content -Raw -Encoding UTF8 $scene.FullName), (New-Object Text.UTF8Encoding $false))
   $profile = Join-Path $work 'profile'
-  if (Test-Path $profile) { Remove-Item -Recurse -Force $profile }
+  # WebView2 helper processes may hold the old profile for a moment after the exe exits.
+  for ($i = 0; $i -lt 30 -and (Test-Path $profile); $i++) {
+    try { Remove-Item -Recurse -Force $profile -ErrorAction Stop } catch { Start-Sleep -Milliseconds 300 }
+  }
   Get-Process Synto -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
   $p = Start-Process $exe -ArgumentList '--dev', (Join-Path $root 'app'), '--script', $run, '--data', $profile -PassThru
   $h = [IntPtr]::Zero
@@ -58,6 +62,10 @@ foreach ($scene in $scenes) {
     $title = $sb.ToString()
   }
   if ($title -ne 'READY') { Write-Warning "$name did not signal READY (title: $title)" }
+  # A window launched from the background can start minimized; restore it before capturing.
+  for ($i = 0; $i -lt 20 -and [Shot]::IsIconic($h); $i++) { [Shot]::ShowWindow($h, 9) | Out-Null; Start-Sleep -Milliseconds 300 }
+  [Shot]::SetWindowPos($h, [IntPtr]::Zero, 20, 10, $size[0], $size[1], 0x0040) | Out-Null
+  Start-Sleep -Milliseconds 800
   $r = New-Object Shot+RECT
   [Shot]::GetClientRect($h, [ref]$r) | Out-Null
   $bmp = New-Object Drawing.Bitmap ($r.R - $r.L), ($r.B - $r.T)
