@@ -3,7 +3,7 @@
 import { clamp, debounce, newId, nfc, arrayBufferToBase64, base64ToArrayBuffer } from './util.js';
 import { dist, snapAngle, boundsContain, boundsOfPoints, rotate } from './geometry.js';
 import {
-  DEFAULT_STYLE, ROTATABLE, PDF, createElement, updateElement, withWorldPoints, worldPoints, withText, withLabel, labelColor, LABEL_PAD,
+  DEFAULT_STYLE, ROTATABLE, PDF, createElement, updateElement, withWorldPoints, worldPoints, withText, withLabel, labelColor, labelCenterY, LABEL_PAD,
   getBounds, hitTest, measureText, pdfLayout, pdfCurrentPage, sanitizeElement,
 } from './elements.js';
 import { DEFAULT_PARAMS, shapeNeedsSquare, SHAPES } from './shapelib.js';
@@ -13,7 +13,9 @@ import { Renderer, renderToCanvas, viewportBounds } from './renderer.js';
 import { selectionFrame, getHandles, hitHandle, resizeElement, scaleElement, groupScaleFactor, rotateAngle, moveLinePoint } from './transform.js';
 import { applyAutoReplace } from './textinput.js';
 import { reflowConnectors, dropDangling, remapReferences, bindingTargetAt, isBindable } from './connectors.js';
-import { centralTopic, addChild as addChildTopicTo, addSibling as addSiblingTopicTo } from './mindmap.js';
+import {
+  centralTopic, addChild as addChildTopicTo, addSibling as addSiblingTopicTo, layoutTreesOf, descendantIds, inTree, reparent, textToTopic,
+} from './mindmap.js';
 import { canvasToPdf } from './pdfexport.js';
 import { renderMathImage, measureMath } from './mathrender.js';
 import { readPageSizes, getPageBitmap, setPageReadyCallback } from './pdfdoc.js';
@@ -25,8 +27,9 @@ const SNAP_RADIUS = 12; // screen px
 const IMAGE_MIME = /^image\/(png|jpeg|gif|webp|svg\+xml)$/;
 const LASER_LIFE = 900; // ms a laser trail point stays visible
 
-// Shapes and formulas have no tool any more; existing ones still render and edit.
-export const TOOLS = ['hand', 'select', 'line', 'pen', 'text', 'mindmap', 'eraser', 'laser'];
+// Formulas have no tool any more; existing ones still render and edit.
+export const TOOLS = ['hand', 'select', 'shape', 'line', 'pen', 'text', 'mindmap', 'eraser', 'laser'];
+const DETACH_DIST = 120; // screen px a branch must be dragged into empty space to float free
 
 export class App {
   constructor(root) {
@@ -184,8 +187,24 @@ export class App {
         if (el.type === 'math' && 'strokeColor' in p) this.mathCache.delete(el.id);
         map.set(el.id, next);
       }
-      if (map.size) { this.replaceElements(map); this.commit(); this.positionTextEditor(); }
+      if (map.size) { this.replaceElements(map); this.relayout(map.keys()); this.commit(); this.positionTextEditor(); }
     }
+    this.emit('style');
+  }
+
+  /** Change the outline of the selected shapes (e.g. a topic from box to ellipse); the label stays. */
+  setShapeKind(shapeId) {
+    if (!SHAPES.has(shapeId)) return;
+    this.state.shapeId = shapeId;
+    const map = new Map();
+    for (const el of this.selected) {
+      if (el.type !== 'shape' || el.shapeId === shapeId) continue;
+      let next = updateElement(el, { shapeId });
+      if (shapeNeedsSquare(shapeId) && !next.topic) { const s = Math.max(next.w, next.h); next = updateElement(next, { w: s, h: s }); }
+      if (next.label) next = withLabel(next, next.label);
+      map.set(el.id, next);
+    }
+    if (map.size) { this.replaceElements(map); this.relayout(map.keys()); this.commit(); }
     this.emit('style');
   }
 
@@ -286,6 +305,7 @@ export class App {
       editingId: this.state.editingId,
       fadedIds: this.fadedIds,
       snap: this.snapHint,
+      dropTarget: this.dropTarget && this.action && this.action.type === 'move' ? this.byId(this.dropTarget) : null,
       marquee: this.action && this.action.type === 'marquee' ? [this.action.start, this.action.end] : null,
       eraserTrail: this.eraserTrail,
       eraserWidth: this.state.eraserSize * 2,
@@ -455,6 +475,8 @@ export class App {
         break;
       case 'move': case 'resize': case 'rotate':
         this.snapHint = null;
+        if (a.type === 'move') this.endMove(a);
+        else this.relayout(a.origs.keys());
         this.commit();
         this.emit('selection');
         break;
@@ -479,6 +501,7 @@ export class App {
     this.fadedIds = null;
     this.eraserTrail = null;
     this.snapHint = null;
+    this.dropTarget = null;
     if (a.type !== 'pan' && a.type !== 'laser') this.setElements(this.history.current.slice());
     this.requestRender();
   }
@@ -643,7 +666,59 @@ export class App {
       const sb = el.startBinding && !ids.has(el.startBinding), eb = el.endBinding && !ids.has(el.endBinding);
       return [el.id, sb || eb ? { ...el, startBinding: sb ? null : el.startBinding, endBinding: eb ? null : el.endBinding } : el];
     }));
-    this.action = { type: 'move', start: p, origs, bounds: bb, moved: false };
+    // Mind map: a topic drags its whole branch along.
+    for (const el of sel) {
+      if (!isBindable(el)) continue;
+      for (const d of descendantIds(this.elements, el.id)) if (!origs.has(d)) { const k = this.byId(d); if (k) origs.set(d, k); }
+    }
+    // A single topic can be dropped onto another topic to move it there (XMind-style).
+    const one = sel.length === 1 && isBindable(sel[0]) && (sel[0].topic || inTree(this.elements, sel[0])) ? sel[0] : null;
+    this.action = {
+      type: 'move', start: p, origs, bounds: bb, moved: false,
+      node: one ? one.id : null, startScreen: this.toScreen(p), noDrop: one ? new Set([one.id, ...descendantIds(this.elements, one.id)]) : null,
+    };
+    this.dropTarget = null;
+  }
+
+  /** Topic under p that a dragged topic could become a child of. */
+  dropTargetAt(p, exclude) {
+    for (let i = this.elements.length - 1; i >= 0; i--) {
+      const el = this.elements[i];
+      if (exclude.has(el.id) || el.type !== 'shape' || !(el.topic || inTree(this.elements, el))) continue;
+      const b = getBounds(el);
+      if (p[0] >= b.minX && p[0] <= b.maxX && p[1] >= b.minY && p[1] <= b.maxY) return el;
+    }
+    return null;
+  }
+
+  /** End of a drag: re-attach / detach mind-map branches, then tidy the trees involved. */
+  endMove(a) {
+    const target = this.dropTarget ? this.byId(this.dropTarget) : null;
+    this.dropTarget = null;
+    const node = a.node ? this.byId(a.node) : null;
+    if (a.moved && node) {
+      const oldParent = node.parentId;
+      if (target && target.id !== oldParent) {
+        this.setElements(reparent(this.elements, node, target, this.state.style));
+        this.relayout([target.id, oldParent].filter(Boolean));
+        return;
+      }
+      // Dragging up/down reorders siblings (layout sorts by position); dragging well sideways
+      // into empty space lets the branch float free (it keeps its own children).
+      if (!target && oldParent && this.pointerScreen && Math.abs(this.pointerScreen[0] - a.startScreen[0]) > DETACH_DIST) {
+        this.setElements(reparent(this.elements, node, null, this.state.style));
+        this.relayout([oldParent, node.id]);
+        return;
+      }
+    }
+    this.relayout(a.origs.keys());
+  }
+
+  /** Re-run the XMind layout for the trees that contain any of ids (no undo step). */
+  relayout(ids) {
+    const m = layoutTreesOf(this.elements, [...ids]);
+    if (m.size) this.replaceElements(m);
+    return m.size > 0;
   }
 
   /** On release of a line end: attach it to the element under it (not to the other end's element). */
@@ -676,6 +751,10 @@ export class App {
     const map = new Map();
     for (const [id, el] of a.origs) map.set(id, updateElement(el, { x: el.x + dx, y: el.y + dy }));
     this.replaceElements(map);
+    if (a.node) {
+      const t = this.dropTargetAt(p, a.noDrop);
+      this.dropTarget = t ? t.id : null;
+    }
   }
 
   moveResize(p, e) {
@@ -978,7 +1057,7 @@ export class App {
       // Centered inside the shape's box.
       w = Math.max(m.w + 8, el.w - LABEL_PAD.x) * z;
       h = m.h * z;
-      const c = this.toScreen([el.x + el.w / 2, el.y + el.h / 2]);
+      const c = this.toScreen([el.x + el.w / 2, el.y + labelCenterY(el)]);
       left = c[0] - w / 2; top = c[1] - h / 2;
       align = 'center'; color = labelColor(el); origin = 'center center';
     } else {
@@ -1004,6 +1083,7 @@ export class App {
     if (!el) return;
     const value = nfc(ta.value);
     this.replaceElements(new Map([[el.id, el.type === 'shape' ? withLabel(el, value) : withText(el, value)]]));
+    this.relayout([el.id]); // the map makes room as the label grows
     this.positionTextEditor();
   }
 
@@ -1019,6 +1099,7 @@ export class App {
       if (el.type === 'shape') {
         // A shape keeps existing when its label is cleared.
         this.replaceElements(new Map([[id, withLabel(el, text)]]));
+        this.relayout([id]);
         this.commit();
       } else {
         if (!text.trim()) this.removeElements(new Set([id]));
@@ -1048,28 +1129,42 @@ export class App {
     this.startTextEdit(node, false, true);
   }
 
+  /** A plain text joining a mind map becomes a boxed topic (same id, words, font, color). */
+  ensureTopic(el) {
+    const cur = el && this.byId(el.id);
+    if (!cur) return null;
+    if (cur.type !== 'text') return cur;
+    this.replaceElements(new Map([[cur.id, textToTopic(cur)]]));
+    return this.byId(cur.id);
+  }
+
   /** Tab: new child topic to the right, connected by a branch; starts editing its label. */
   addChildTopic(parent = this.mindmapNode) {
     if (!parent) return;
     this.finishTextEdit();
-    const cur = this.byId(parent.id);
+    const cur = this.ensureTopic(parent);
     if (!cur) return;
     const r = addChildTopicTo(this.elements, cur, this.state.style);
-    this.setElements(r.elements, { commit: true });
-    this.revealElement(r.node);
-    this.startTextEdit(r.node, false, true);
+    this.placeNewTopic(r);
   }
 
   /** Space / Enter: new sibling topic below (same parent). */
   addSiblingTopic(node = this.mindmapNode) {
     if (!node) return;
     this.finishTextEdit();
-    const cur = this.byId(node.id);
+    const cur = this.ensureTopic(node);
     if (!cur) return;
     const r = addSiblingTopicTo(this.elements, cur, this.state.style);
-    this.setElements(r.elements, { commit: true });
-    this.revealElement(r.node);
-    this.startTextEdit(r.node, false, true);
+    this.placeNewTopic(r);
+  }
+
+  placeNewTopic(r) {
+    this.setElements(r.elements);
+    this.relayout([r.node.id]);
+    this.commit();
+    const node = this.byId(r.node.id);
+    this.revealElement(node);
+    this.startTextEdit(node, false, true);
   }
 
   /** Pan just enough to bring an element into view. */
@@ -1189,8 +1284,15 @@ export class App {
 
   deleteSelected() {
     if (!this.state.selectedIds.size) return;
-    this.removeElements(new Set(this.state.selectedIds), { commit: true });
-    this.select([]);
+    // Mind map (XMind-style): deleting a topic deletes its branch; the parent gets selected.
+    const ids = new Set(this.state.selectedIds);
+    for (const id of [...ids]) for (const d of descendantIds(this.elements, id)) ids.add(d);
+    const parents = [...new Set(this.elements.filter((e) => ids.has(e.id) && e.parentId && !ids.has(e.parentId)).map((e) => e.parentId))]
+      .filter((id) => this.byId(id));
+    this.removeElements(ids);
+    this.relayout(parents);
+    this.commit();
+    this.select(parents.length === 1 ? parents : []);
   }
 
   duplicateSelected(offset = 16) {
@@ -1208,7 +1310,7 @@ export class App {
   nudge(dx, dy) {
     const map = new Map();
     for (const el of this.selected) map.set(el.id, updateElement(el, { x: el.x + dx, y: el.y + dy }));
-    if (map.size) { this.replaceElements(map); this.commit(); }
+    if (map.size) { this.replaceElements(map); this.relayout(map.keys()); this.commit(); }
   }
 
   /** dir: 'front' | 'back' | 'forward' | 'backward' */

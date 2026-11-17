@@ -78,7 +78,8 @@ async function start() {
       if (e.key === 'Tab') { e.preventDefault(); const node = shape; app.finishTextEdit(); app.addChildTopic(app.byId(node.id)); return; }
       return;
     }
-    if (e.key === 'Tab') { e.preventDefault(); if (!document.execCommand('insertText', false, '    ')) ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end'); app.onTextInput(); }
+    // Plain text: Tab turns it into a mind-map topic and adds its first branch.
+    if (e.key === 'Tab') { e.preventDefault(); const id = app.state.editingId; app.finishTextEdit(); const el = app.byId(id); if (el) app.addChildTopic(el); }
   });
   ta.addEventListener('blur', () => {
     // Defer: focus may come right back (e.g. inserting a symbol from the palette).
@@ -223,11 +224,19 @@ function onKey(e, app, ui) {
   if (key === '?' || (code === 'Slash' && e.shiftKey)) { ui.openHelp(); return; }
   if (code === 'Digit1' && e.shiftKey) { app.zoomToFit(); return; }
 
+  // XMind: with one topic selected, just start typing to replace its text.
+  const node = app.mindmapNode;
+  if (node && node.type === 'shape' && (node.topic || node.label) && key.length === 1 && key !== ' ' && app.state.tool === 'select') {
+    app.startTextEdit(node, false, true); // focus moves to the editor; this key lands there
+    return;
+  }
+
   const digit = /^Digit(\d)$/.exec(code);
   const tools = { 1: 'select', 4: 'pen', 5: 'text', 0: 'eraser' };
   if (digit) {
     const n = +digit[1];
     if (tools[n]) { app.setTool(tools[n], n === 4 ? { penMode: 'pen' } : {}); return; }
+    if (n === 2) { if (app.state.tool === 'shape') ui.toggleShapes(ui.toolButtons.shape); else app.setTool('shape'); return; }
     if (n === 3) { if (app.state.tool === 'line') ui.toggleLines(ui.toolButtons.line); else app.setTool('line'); return; }
     if (n === 7) { ui.toggleSymbols(ui.toolButtons.symbol); return; }
     if (n === 8) { app.pickAndInsert('image'); return; }

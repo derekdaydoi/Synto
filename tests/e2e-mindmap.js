@@ -17,14 +17,15 @@
   for (const type of ['pointerdown', 'pointerup']) {
     c.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true, cancelable: true, clientX: r.left + at[0], clientY: r.top + at[1], button: 0, buttons: type === 'pointerdown' ? 1 : 0, pointerType: 'mouse' }));
   }
-  let keys = '';
+  let keys = '', kd = 0;
+  window.addEventListener('keydown', () => { kd++; }, true);
   for (const t of ['keydown', 'keyup']) {
     window.addEventListener(t, (e) => { if (e.code === 'Space') keys += (t === 'keydown' ? 'D' : 'U') + (e.repeat ? 'r' : ''); }, true);
   }
   setInterval(() => {
     const els = app.elements;
     const sel = app.selected[0];
-    const title = `MM els=${els.length} topics=${els.filter((e) => e.topic).length} lines=${els.filter((e) => e.type === 'line' && e.startBinding && e.endBinding).length} editing=${app.state.editingId ? 'yes' : 'no'} sel=${sel ? (sel.label || sel.type) : '-'} space=${keys.slice(-8)} tap=${app.spaceTap ? 1 : 0}`;
+    const title = `MM els=${els.length} topics=${els.filter((e) => e.topic).length} lines=${els.filter((e) => e.type === 'line' && e.startBinding && e.endBinding).length} editing=${app.state.editingId ? 'yes' : 'no'} sel=${sel ? (sel.label || sel.type) : "-"} n=${app.state.selectedIds.size} space=${keys.slice(-8)} tap=${app.spaceTap ? 1 : 0} kd=${kd} focus=${document.activeElement ? document.activeElement.tagName : '-'} hasFocus=${document.hasFocus()}`;
     if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ type: 'title', title });
   }, 100);
 })();

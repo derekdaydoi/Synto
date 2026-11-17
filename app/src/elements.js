@@ -126,6 +126,12 @@ export function withText(el, text) {
 
 export const LABEL_PAD = { x: 18, y: 10 };
 export const TOPIC_MIN = { w: 96, h: 44 };
+const LABEL_FIT = {
+  circle: [1.42, 1.42], ellipse: [1.42, 1.42], rhombus: [1.9, 1.9], 'tri-iso': [1.9, 1.9], 'tri-right': [1.9, 1.9], 'tri-eq': [1.9, 1.9],
+  hexagon: [1.3, 1.1], parallelogram: [1.45, 1], star: [2.4, 2.4], 'arrow-right': [1.5, 1.8],
+};
+/** Vertical center of a shape's label, in local box space (triangles: lower, where they are wide). */
+export const labelCenterY = (el) => (/^tri-/.test(el.shapeId) ? el.h * 0.62 : el.h / 2);
 export const labelColor = (el) => (el.strokeColor === 'transparent' ? '#0a0a0a' : el.strokeColor);
 
 /**
@@ -135,7 +141,9 @@ export const labelColor = (el) => (el.strokeColor === 'transparent' ? '#0a0a0a' 
 export function withLabel(el, text) {
   const label = nfc(text);
   const m = measureText(label || ' ', el.font, el.fontSize);
-  const needW = m.w + LABEL_PAD.x * 2, needH = m.h + LABEL_PAD.y * 2;
+  // Non-rectangular outlines need a bigger box for the text block to sit inside them.
+  const [fw, fh] = LABEL_FIT[el.shapeId] || [1, 1];
+  const needW = (m.w + LABEL_PAD.x * 2) * fw, needH = (m.h + LABEL_PAD.y * 2) * fh;
   const w = el.topic ? Math.max(TOPIC_MIN.w, needW) : Math.max(el.w, label ? needW : 0);
   const h = el.topic ? Math.max(TOPIC_MIN.h, needH) : Math.max(el.h, label ? needH : 0);
   const cx = el.x + el.w / 2, cy = el.y + el.h / 2;

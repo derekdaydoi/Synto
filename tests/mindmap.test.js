@@ -1,7 +1,7 @@
 import { test, eq, ok, near } from './harness.js';
-import { createElement, withLabel, getBounds, worldPoints, sanitizeElement, hitTest, DEFAULT_STYLE } from '../app/src/elements.js';
+import { createElement, withLabel, withText, getBounds, worldPoints, sanitizeElement, hitTest, DEFAULT_STYLE } from '../app/src/elements.js';
 import { borderPoint, reflowConnectors, bindingTargetAt, dropDangling, remapReferences } from '../app/src/connectors.js';
-import { addChild, addSibling, centralTopic } from '../app/src/mindmap.js';
+import { addChild, addSibling, centralTopic, layoutTreesOf, descendantIds, reparent, textToTopic, inTree, treeRoot } from '../app/src/mindmap.js';
 import { jpegToPdf } from '../app/src/pdfexport.js';
 
 const box = (x, y, w = 100, h = 50, extra = {}) => createElement('shape', { shapeId: 'rect', x, y, w, h, ...extra });
@@ -86,54 +86,86 @@ test('labels: a borderless labelled shape is clickable inside', () => {
   ok(hitTest(t, [t.x + t.w / 2, t.y + t.h / 2], 1));
 });
 
+// Apply the XMind layout to the whole element list (what the app does after each change).
+const tidy = (els, id) => { const m = layoutTreesOf(els, [id]); return els.map((e) => m.get(e.id) || e); };
+const byId = (els, id) => els.find((e) => e.id === id);
+const overlaps = (a, b) => { const p = getBounds(a), q = getBounds(b); return p.minX < q.maxX && p.maxX > q.minX && p.minY < q.maxY && p.maxY > q.minY; };
+
 test('mindmap: Tab places children to the right, stacked without overlap', () => {
   const root = centralTopic(DEFAULT_STYLE, [0, 0]);
-  let els = [root];
-  let r = addChild(els, root, DEFAULT_STYLE, 'Một');
-  els = r.elements;
-  const c1 = r.node;
+  let r = addChild([root], root, DEFAULT_STYLE, 'Một');
+  let els = tidy(r.elements, r.node.id);
+  const c1 = byId(els, r.node.id);
   ok(c1.x > getBounds(root).maxX, 'right of parent');
   eq(c1.parentId, root.id);
   ok(els.some((e) => e.type === 'line' && e.startBinding === root.id && e.endBinding === c1.id), 'branch connector');
   r = addChild(els, root, DEFAULT_STYLE, 'Hai');
-  els = r.elements;
-  const c2 = r.node;
-  near(c2.x, c1.x, 1e-6, 'same column');
-  ok(c2.y >= getBounds(c1).maxY, 'below the first child');
-  ok(c2.fontSize < root.fontSize, 'children get a smaller font');
+  els = tidy(r.elements, r.node.id);
+  const a = byId(els, c1.id), b = byId(els, r.node.id);
+  near(b.x, a.x, 1e-6, 'same column');
+  ok(b.y >= getBounds(a).maxY, 'second child below the first');
+  near((a.y + b.y + b.h) / 2, root.y + root.h / 2, 0.5, 'children centered on the parent');
+  ok(b.fontSize < root.fontSize, 'children get a smaller font');
 });
 
-test('mindmap: Space adds a sibling under the node with the same parent', () => {
+test('mindmap: a sibling goes right after its node, between existing siblings', () => {
   const root = centralTopic(DEFAULT_STYLE, [0, 0]);
-  let r = addChild([root], root, DEFAULT_STYLE, 'Một');
-  const c1 = r.node;
-  r = addSibling(r.elements, c1, DEFAULT_STYLE, 'Hai');
-  eq(r.node.parentId, root.id);
-  ok(r.node.y > c1.y);
-  ok(r.elements.some((e) => e.type === 'line' && e.startBinding === root.id && e.endBinding === r.node.id));
+  let els = [root];
+  const ids = [];
+  for (const k of ['A', 'B', 'C']) { const r = addChild(els, root, DEFAULT_STYLE, k); ids.push(r.node.id); els = tidy(r.elements, r.node.id); }
+  const s = addSibling(els, byId(els, ids[0]), DEFAULT_STYLE, 'A2');
+  els = tidy(s.elements, s.node.id);
+  eq(byId(els, s.node.id).parentId, root.id);
+  const order = els.filter((e) => e.parentId === root.id).sort((p, q) => p.y - q.y).map((e) => e.label);
+  eq(order, ['A', 'A2', 'B', 'C']);
+  ok(s.elements.some((e) => e.type === 'line' && e.startBinding === root.id && e.endBinding === s.node.id));
   const lone = addSibling([root], root, DEFAULT_STYLE, 'Khác');
   eq(lone.node.parentId, null);
   ok(!lone.elements.some((e) => e.type === 'line'), 'a root sibling has no branch');
 });
 
-test('mindmap: a new main branch goes below the previous branch subtree (no interleaving)', () => {
+test('mindmap: subtrees never overlap, even with deep and long branches', () => {
   const root = centralTopic(DEFAULT_STYLE, [0, 0]);
-  let r = addChild([root], root, DEFAULT_STYLE, 'A');
-  const a = r.node;
-  let els = r.elements;
-  for (const k of ['a1', 'a2', 'a3']) els = addChild(els, els.find((e) => e.id === a.id), DEFAULT_STYLE, k).elements;
-  const lowestA = Math.max(...els.filter((e) => e.parentId === a.id).map((e) => getBounds(e).maxY));
-  r = addChild(els, root, DEFAULT_STYLE, 'B');
-  ok(r.node.y >= lowestA, 'B starts below all of A\'s children');
-  const s = addSibling(els, a, DEFAULT_STYLE, 'A2');
-  ok(s.node.y >= lowestA, 'a sibling of A also clears A\'s subtree');
+  let els = [root];
+  const add = (pid, label) => { const r = addChild(els, byId(els, pid), DEFAULT_STYLE, label); els = tidy(r.elements, r.node.id); return r.node.id; };
+  const a = add(root.id, 'A'), b = add(root.id, 'B');
+  for (const k of ['a1', 'a2', 'a3']) add(a, k);
+  const b1 = add(b, 'b1');
+  add(b1, 'một nhánh cháu có chữ khá là dài');
+  add(b1, 'cháu 2');
+  const nodes = els.filter((e) => e.type === 'shape');
+  for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) ok(!overlaps(nodes[i], nodes[j]), `${nodes[i].label} / ${nodes[j].label}`);
+  const lowestA = Math.max(...[...descendantIds(els, a), a].map((id) => getBounds(byId(els, id)).maxY));
+  ok(byId(els, b).y >= lowestA, 'B sits below all of A');
 });
 
-test('mindmap: sibling skips over existing boxes in the way', () => {
-  const a = withLabel(box(0, 0, 100, 40, { topic: true }), 'A');
-  const blockerBox = box(0, 60, 100, 40);
-  const r = addSibling([a, blockerBox], a, DEFAULT_STYLE, 'B');
-  ok(r.node.y >= getBounds(blockerBox).maxY, 'placed below the obstacle');
+test('mindmap: a longer label pushes its children further right', () => {
+  const root = centralTopic(DEFAULT_STYLE, [0, 0]);
+  let r = addChild([root], root, DEFAULT_STYLE, 'A');
+  let els = tidy(r.elements, r.node.id);
+  const a = r.node.id;
+  r = addChild(els, byId(els, a), DEFAULT_STYLE, 'a1');
+  els = tidy(r.elements, r.node.id);
+  const before = byId(els, r.node.id).x;
+  els = els.map((e) => (e.id === a ? withLabel(e, 'A với một tên rất rất dài') : e));
+  els = tidy(els, a);
+  ok(byId(els, r.node.id).x > before + 50, 'grandchild column moved right');
+  ok(byId(els, a).x > getBounds(root).maxX, 'the grown topic still starts right of its parent');
+});
+
+test('mindmap: reparent moves the branch line; textToTopic boxes a text', () => {
+  const root = centralTopic(DEFAULT_STYLE, [0, 0]);
+  let r = addChild([root], root, DEFAULT_STYLE, 'A');
+  const a = r.node.id;
+  r = addChild(r.elements, root, DEFAULT_STYLE, 'B');
+  let els = reparent(r.elements, byId(r.elements, r.node.id), byId(r.elements, a), DEFAULT_STYLE);
+  eq(byId(els, r.node.id).parentId, a);
+  eq(els.filter((e) => e.type === 'line' && e.endBinding === r.node.id).map((e) => e.startBinding), [a]);
+  ok(inTree(els, byId(els, a)) && treeRoot(els, byId(els, r.node.id)).id === root.id);
+  const t = withText(createElement('text', { x: 10, y: 20 }), 'Ý tưởng');
+  const topic = textToTopic(t);
+  eq([topic.id, topic.type, topic.label, topic.topic], [t.id, 'shape', 'Ý tưởng', true]);
+  ok(topic.x < t.x && topic.y < t.y && topic.x + topic.w > t.x + t.w, 'box surrounds the words');
 });
 
 test('sanitize: keeps labels, bindings and parent ids; rejects bad ones', () => {

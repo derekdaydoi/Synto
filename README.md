@@ -7,7 +7,7 @@
 
 <p align="center">
   Ghi chú trên mặt giấy vô tận, nét vẽ tay kiểu Excalidraw, dành cho mọi người:<br>
-  ký hiệu, nét vẽ có bắt điểm, sơ đồ tư duy, ảnh và PDF ngay trên canvas.
+  ký hiệu, nét vẽ có bắt điểm, hình cơ bản, sơ đồ tư duy kiểu XMind, ảnh và PDF ngay trên canvas.
 </p>
 
 <p align="center">
@@ -35,7 +35,8 @@
 - **Mặt giấy vô tận**: kéo, thu phóng (Ctrl + lăn chuột, hai ngón tay), lưới chấm bật/tắt.
 - **Nét vẽ**: đoạn thẳng, gấp khúc, đường cong, cung qua 3 điểm, mũi tên, bút tự do, bút dạ quang.
 - **Bắt điểm tự động**: đỉnh, trung điểm, tâm, giao điểm, chân đường vuông góc, điểm trên cạnh. Giữ Alt để tạm tắt, Shift để khoá góc 15°.
-- **Sơ đồ tư duy** kiểu XMind: chủ đề là hộp có chữ (có viền hoặc không viền), nối bằng đường gắn vào hộp, kéo hộp thì đường đi theo, mỗi đầu đường chọn được mũi tên. Chọn một chủ đề: **Tab** thêm nhánh con, **Space** (nhấn nhả) hoặc **Enter** thêm nhánh ngang hàng, **F2** sửa chữ. Chữ cũng đặt được vào trong mọi hình học (bấm đúp vào hình).
+- **Sơ đồ tư duy** kiểu XMind, **tự giãn và tự xếp**: gõ chữ dài thì hộp nở sang phải và các nhánh tự dãn ra, không bao giờ đè nhau. Chọn một chủ đề rồi: **Tab** thêm nhánh con, **Enter** (hoặc Space) thêm nhánh ngang hàng, **gõ luôn** để sửa chữ, **Delete** xoá cả nhánh. Kéo thả một chủ đề lên chủ đề khác để đổi nhánh, kéo lên/xuống để đổi thứ tự, kéo hẳn sang ngang để tách ra. Đang gõ một **chữ thường** mà bấm **Tab** thì chữ đó thành ô chủ đề và nối luôn vào sơ đồ.
+- **Hình cơ bản và tô màu**: chữ nhật, bo góc, vuông, tròn, elip, thoi, tam giác, bình hành, lục giác, ngôi sao, mũi tên. Tô màu nền một chạm, đổi hình dạng của chủ đề ngay trong bảng thuộc tính, chữ đặt được vào trong mọi hình (bấm đúp).
 - **Chữ**: Patrick Hand (viết tay) và Arial, đủ dấu tiếng Việt. Gõ `>=` thành ≥, `\delta` rồi dấu cách thành δ.
 - **Phím tắt**: Ctrl+A chọn toàn bộ, Ctrl+Z hoàn tác (giữ để lùi liên tục), Ctrl+Y làm lại.
 - **Ảnh và PDF** trên canvas: kéo thả, dán hoặc mở file. PDF thu phóng, cuộn trong khung, vẽ chú thích lên trang.

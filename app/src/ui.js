@@ -1,7 +1,7 @@
 // DOM user interface around the canvas: toolbar, properties, popovers, dialogs.
 
 import { h, icon } from './util.js';
-import { SHAPES } from './shapelib.js';
+import { SHAPES, designPath } from './shapelib.js';
 import { SNAP_LABELS } from './snapping.js';
 import { katexHtml } from './mathrender.js';
 import { quickToLatex, applyAutoReplace } from './textinput.js';
@@ -49,6 +49,26 @@ const I = {
   github: 'M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2',
   back: 'M4 4h12v12H4zM20 8v12H8',
 };
+
+// The everyday shapes; the full 63-shape library still renders old files.
+const BASIC_SHAPES = ['rect', 'roundrect', 'square', 'circle', 'ellipse', 'rhombus', 'tri-iso', 'tri-right', 'parallelogram', 'hexagon', 'star', 'arrow-right'];
+
+function shapeIcon(id, size = 22, params) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('width', size);
+  s.setAttribute('height', size);
+  s.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', designPath(id, params));
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', '1.6');
+  p.setAttribute('stroke-linecap', 'round');
+  p.setAttribute('stroke-linejoin', 'round');
+  s.appendChild(p);
+  return s;
+}
 
 const COLORS = ['#0a0a0a', '#e03131', '#1971c2', '#2f9e44', '#f08c00', '#7048e8', '#868e96'];
 const FILLS = ['transparent', '#ffc9c9', '#a5d8ff', '#b2f2bb', '#ffec99', '#d0bfff', '#e9ecef'];
@@ -104,7 +124,8 @@ export class UI {
     }
     switch (what) {
       case 'tool': this.refreshToolbar(); this.refreshProps(); break;
-      case 'selection': case 'style': case 'editing': this.refreshProps(); break;
+      case 'selection': case 'editing': this.refreshProps(); this.refreshHint(); break;
+      case 'style': this.refreshProps(); break;
       case 'elements': this.refreshProps(); this.refreshHistory(); break;
       case 'history': this.refreshHistory(); break;
       case 'camera': this.refreshZoom(); break;
@@ -148,6 +169,7 @@ export class UI {
     this.toolButtons = {
       hand: T('hand', 'Kéo', I.hand, 'H'),
       select: T('select', 'Chọn', I.select, '1'),
+      shape: T('shape', 'Hình cơ bản', I.hex, '2', { wide: true, onclick: (e) => this.toggleShapes(e.currentTarget) }),
       line: T('line', 'Nét', I.curve, '3', { wide: true, onclick: (e) => this.toggleLines(e.currentTarget) }),
       pen: T('pen', 'Bút', I.pen, '4', { onclick: () => this.app.setTool('pen', { penMode: 'pen' }) }),
       text: T('text', 'Chữ', I.text, '5'),
@@ -159,7 +181,7 @@ export class UI {
       laser: T('laser', 'Bút laser', I.laser, 'K'),
     };
     const tb = this.toolButtons;
-    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.line, tb.pen, tb.text, tb.mindmap, tb.symbol, tb.image, tb.file, tb.eraser,
+    bar.append(this.lockBtn, h('span', { class: 'sep' }), tb.hand, tb.select, tb.shape, tb.line, tb.pen, tb.text, tb.mindmap, tb.symbol, tb.image, tb.file, tb.eraser,
       h('span', { class: 'sep' }), tb.laser);
     this.hint = h('span', { class: 'hint' });
     host.append(bar, this.hint);
@@ -172,7 +194,9 @@ export class UI {
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
-    // The line button shows the current choice.
+    // Shape / line buttons show the current choice.
+    const shapeBtn = this.toolButtons.shape;
+    shapeBtn.replaceChild(shapeIcon(s.shapeId, 19, s.shapeParams), shapeBtn.firstChild);
     const lineIcons = { segment: I.segment, polyline: I.polyline, curve: I.curve, arc: I.arc };
     const lineBtn = this.toolButtons.line;
     const lic = s.tool === 'pen' && s.penMode === 'highlighter' ? I.highlighter : lineIcons[s.lineKind] || I.curve;
@@ -180,9 +204,27 @@ export class UI {
     lineBtn.classList.toggle('on', s.tool === 'line' || (s.tool === 'pen' && s.penMode === 'highlighter'));
     this.lockBtn.classList.toggle('on', s.toolLocked);
     this.lockBtn.replaceChild(icon(s.toolLocked ? I.lock : I.unlock, 19), this.lockBtn.firstChild);
+    this.refreshHint();
+  }
+
+  /** One-line help under the toolbar: follows the tool, or the selected mind-map topic. */
+  refreshHint() {
+    const s = this.app.state;
+    const node = s.tool === 'select' && !s.editingId ? this.app.mindmapNode : null;
+    if (node) {
+      this.hint.textContent = node.type === 'shape' || node.type === 'text'
+        ? 'Tab: nhánh con · Enter: nhánh ngang hàng · gõ để sửa chữ · kéo thả lên chủ đề khác để đổi nhánh'
+        : 'Tab: nối thành nhánh con';
+      return;
+    }
+    if (s.editingId) {
+      const el = this.app.byId(s.editingId);
+      this.hint.textContent = el && el.type === 'shape' ? 'Enter: xong · Tab: thêm nhánh con · Shift+Enter: xuống dòng' : 'Tab: biến thành sơ đồ tư duy · Esc: xong';
+      return;
+    }
     const hints = {
       select: 'Kéo để chọn nhiều · Shift để giữ tỉ lệ · Alt để tắt bắt điểm',
-      shape: 'Kéo để vẽ hình · Shift: giữ tỉ lệ',
+      shape: 'Kéo để vẽ hình · Shift: giữ tỉ lệ · bấm đúp vào hình để gõ chữ',
       line: s.lineKind === 'segment' ? 'Kéo để vẽ đoạn thẳng · Shift: khoá góc 15°' : s.lineKind === 'arc' ? 'Kéo dây cung, rồi bấm để chọn độ cong' : 'Bấm từng điểm · bấm đúp hoặc Enter để kết thúc',
       pen: s.pdfAnnotate ? 'Đang vẽ lên PDF' : 'Vẽ tự do',
       text: 'Bấm để gõ chữ · gõ \\delta rồi dấu cách để chèn Δ',
@@ -268,13 +310,17 @@ export class UI {
           h('span', { class: 'muted', style: { fontSize: '12px', lineHeight: '1.5' } }, 'Quẹt qua để xoá cả nét. Giữ Alt khi quẹt để lấy lại. Phím [ và ] để đổi cỡ nhanh.')));
       return;
     }
-    if (!types.size) { panel.hidden = true; panel.classList.remove('open'); return; }
+    // Typing into an object: keep the page clear, the panel comes back when editing ends.
+    if (!types.size || s.editingId) { panel.hidden = true; panel.classList.remove('open'); return; }
     panel.hidden = false;
-    const cur = sel[0] || s.style;
     const st = s.style;
     const row = (label, ...children) => h('div', { class: 'row' }, h('span', { class: 'lbl' }, label), ...children);
+    // Less common settings live in a collapsed "more" section, so the panel stays short.
+    const more = [];
     const has = (...t) => t.some((x) => types.has(x));
     const val = (k) => (sel.length && sel[0][k] !== undefined ? sel[0][k] : st[k]);
+    // First fill of a see-through shape is solid color (what "tô màu" means); hatching is in "more".
+    const pickFill = (c) => app.setStyle(c !== 'transparent' && val('fillColor') === 'transparent' ? { fillColor: c, fillStyle: 'solid' } : { fillColor: c });
 
     if (has('shape', 'line', 'draw', 'text', 'math')) {
       // Only shapes can be borderless (e.g. mind-map topics without a box).
@@ -288,18 +334,25 @@ export class UI {
     if (has('shape')) {
       panel.append(row('Màu nền', h('div', { class: 'line' }, FILLS.map((c) => h('button', {
         class: 'swatch' + (c === 'transparent' ? ' none' : '') + (val('fillColor') === c ? ' on' : ''), style: c === 'transparent' ? {} : { background: c },
-        'aria-label': c === 'transparent' ? 'Không nền' : 'Nền ' + c, onclick: () => app.setStyle({ fillColor: c }),
-      })), colorInput(val('fillColor') === 'transparent' ? '#ffffff' : val('fillColor'), (c) => app.setStyle({ fillColor: c })))));
+        'aria-label': c === 'transparent' ? 'Không nền' : 'Nền ' + c, onclick: () => pickFill(c),
+      })), colorInput(val('fillColor') === 'transparent' ? '#ffffff' : val('fillColor'), (c) => pickFill(c)))));
       if (val('fillColor') !== 'transparent') {
-        panel.append(row('Kiểu tô', seg([['hachure', 'Gạch'], ['cross-hatch', 'Chéo'], ['solid', 'Đặc']], val('fillStyle'), (v) => app.setStyle({ fillStyle: v }))));
+        more.push(row('Kiểu tô', seg([['solid', 'Đặc'], ['hachure', 'Gạch'], ['cross-hatch', 'Chéo']], val('fillStyle'), (v) => app.setStyle({ fillStyle: v }))));
+      }
+      const shapesSel = sel.filter((e) => e.type === 'shape');
+      if (shapesSel.length) {
+        const curId = shapesSel[0].shapeId;
+        panel.append(row('Hình dạng', h('div', { class: 'line' }, BASIC_SHAPES.filter((id) => SHAPES.has(id)).map((id) => h('button', {
+          class: 'pb icon' + (curId === id ? ' on' : ''), title: SHAPES.get(id).n, 'aria-label': SHAPES.get(id).n, onclick: () => app.setShapeKind(id),
+        }, shapeIcon(id, 16))))));
       }
     }
     if (has('shape', 'line', 'draw')) {
-      panel.append(row('Độ dày', seg([[1, 'Mảnh'], [2, 'Vừa'], [4, 'Đậm']], val('strokeWidth'), (v) => app.setStyle({ strokeWidth: v }))));
+      more.push(row('Độ dày', seg([[1, 'Mảnh'], [2, 'Vừa'], [4, 'Đậm']], val('strokeWidth'), (v) => app.setStyle({ strokeWidth: v }))));
     }
     if (has('shape', 'line')) {
-      panel.append(row('Kiểu nét', seg([['solid', 'Liền'], ['dashed', 'Đứt'], ['dotted', 'Chấm']], val('strokeStyle'), (v) => app.setStyle({ strokeStyle: v }))));
-      panel.append(row('Độ phác', seg([[0, 'Mượt'], [1, 'Phác'], [2, 'Rất phác']], val('roughness'), (v) => app.setStyle({ roughness: v }))));
+      more.push(row('Kiểu nét', seg([['solid', 'Liền'], ['dashed', 'Đứt'], ['dotted', 'Chấm']], val('strokeStyle'), (v) => app.setStyle({ strokeStyle: v }))));
+      more.push(row('Độ phác', seg([[0, 'Mượt'], [1, 'Phác'], [2, 'Rất phác']], val('roughness'), (v) => app.setStyle({ roughness: v }))));
     }
     if (has('line')) {
       const heads = [['none', '—'], ['arrow', '→'], ['dot', '●'], ['bar', '⊢']];
@@ -307,18 +360,19 @@ export class UI {
       panel.append(row('Đầu kết thúc', seg(heads, val('endHead'), (v) => app.setStyle({ endHead: v }))));
     }
     if (has('text', 'shape')) {
-      panel.append(row(has('text') ? 'Phông chữ' : 'Chữ trong hình', h('div', { class: 'grid2' },
+      panel.append(row('Cỡ chữ', seg([[16, 'S'], [20, 'M'], [26, 'L'], [36, 'XL']], val('fontSize'), (v) => app.setStyle({ fontSize: v }))));
+      more.push(row(has('text') ? 'Phông chữ' : 'Chữ trong hình', h('div', { class: 'grid2' },
         h('button', { class: 'pb' + (val('font') === 'hand' ? ' on' : ''), style: { height: '44px', flexDirection: 'column' }, onclick: () => app.setStyle({ font: 'hand' }) },
           h('span', { style: { fontFamily: '"Patrick Hand"', fontSize: '20px', lineHeight: '1' } }, 'Aa'), h('span', { style: { fontSize: '10px' } }, 'Viết tay')),
         h('button', { class: 'pb' + (val('font') === 'arial' ? ' on' : ''), style: { height: '44px', flexDirection: 'column' }, onclick: () => app.setStyle({ font: 'arial' }) },
           h('span', { style: { fontFamily: 'Arial, Arimo, sans-serif', fontSize: '17px', lineHeight: '1.1' } }, 'Aa'), h('span', { style: { fontSize: '10px' } }, 'Arial')))));
-      panel.append(row('Cỡ chữ', seg([[16, 'S'], [20, 'M'], [26, 'L'], [36, 'XL']], val('fontSize'), (v) => app.setStyle({ fontSize: v }))));
-      if (has('text')) panel.append(row('Căn chữ', seg([['left', 'Trái'], ['center', 'Giữa'], ['right', 'Phải']], val('align'), (v) => app.setStyle({ align: v }))));
+      if (has('text')) more.push(row('Căn chữ', seg([['left', 'Trái'], ['center', 'Giữa'], ['right', 'Phải']], val('align'), (v) => app.setStyle({ align: v }))));
     }
-    if (sel.length === 1 && sel[0].type === 'shape') {
-      panel.append(row('Sơ đồ tư duy', h('div', { class: 'line' },
+    if (sel.length === 1 && (sel[0].type === 'shape' || sel[0].type === 'text')) {
+      // Shown first: it is what a selected box is most often for.
+      panel.prepend(row('Sơ đồ tư duy', h('div', { class: 'line' },
         h('button', { class: 'pb', title: 'Thêm nhánh con (Tab)', onclick: () => app.addChildTopic() }, '+ Nhánh con'),
-        h('button', { class: 'pb', title: 'Thêm nhánh ngang hàng (Space)', onclick: () => app.addSiblingTopic() }, '+ Ngang hàng'))));
+        h('button', { class: 'pb', title: 'Thêm nhánh ngang hàng (Enter)', onclick: () => app.addSiblingTopic() }, '+ Ngang hàng'))));
     }
     const shapeSel = sel.length === 1 && sel[0].type === 'shape' ? sel[0] : null;
     const shapeId = shapeSel ? shapeSel.shapeId : !sel.length && s.tool === 'shape' ? s.shapeId : null;
@@ -344,20 +398,34 @@ export class UI {
       panel.append(row('Công thức', h('button', { class: 'pb', onclick: () => this.openMathEditor(sel[0], null) }, 'Sửa công thức…')));
     }
     if (sel.length || types.size) {
-      panel.append(row(`Độ trong suốt: ${val('opacity')}%`, range(10, 100, 10, val('opacity'), (v) => app.setStyle({ opacity: v }))));
+      more.push(row(`Độ trong suốt: ${val('opacity')}%`, range(10, 100, 10, val('opacity'), (v) => app.setStyle({ opacity: v }))));
     }
     if (sel.length) {
-      panel.append(row('Lớp', h('div', { class: 'line' },
+      more.push(row('Lớp', h('div', { class: 'line' },
         h('button', { class: 'pb', title: 'Đưa xuống dưới cùng (Ctrl+Shift+[)', 'aria-label': 'Đưa xuống dưới cùng', onclick: () => app.reorder('back') }, '⇊'),
         h('button', { class: 'pb', title: 'Đưa xuống (Ctrl+[)', 'aria-label': 'Đưa xuống', onclick: () => app.reorder('backward') }, '↓'),
         h('button', { class: 'pb', title: 'Đưa lên (Ctrl+])', 'aria-label': 'Đưa lên', onclick: () => app.reorder('forward') }, '↑'),
         h('button', { class: 'pb', title: 'Đưa lên trên cùng (Ctrl+Shift+])', 'aria-label': 'Đưa lên trên cùng', onclick: () => app.reorder('front') }, '⇈'))));
-      panel.append(row('Thao tác', h('div', { class: 'line' },
+      more.push(row('Thao tác', h('div', { class: 'line' },
         h('button', { class: 'pb', title: 'Nhân bản (Ctrl+D)', 'aria-label': 'Nhân bản', onclick: () => app.duplicateSelected() }, icon(I.copy, 15)),
         h('button', { class: 'pb', title: 'Xoá (Delete)', 'aria-label': 'Xoá', onclick: () => app.deleteSelected() }, icon(I.trash, 15)))));
     }
-    void cur;
+    if (more.length) {
+      const open = this.moreOpen;
+      panel.append(h('button', {
+        class: 'more-toggle', 'aria-expanded': open ? 'true' : 'false',
+        onclick: () => { this.moreOpen = !open; try { localStorage.setItem('synto.propsMore', this.moreOpen ? '1' : '0'); } catch { /* storage off */ } this.refreshProps(); },
+      }, open ? 'Thu gọn' : 'Tuỳ chỉnh thêm', icon(I.caret, 12, open ? 'style="transform:rotate(180deg)"' : '')));
+      if (open) panel.append(...more);
+    }
   }
+
+  get moreOpen() {
+    if (this._moreOpen === undefined) { try { this._moreOpen = localStorage.getItem('synto.propsMore') === '1'; } catch { this._moreOpen = false; } }
+    return this._moreOpen;
+  }
+
+  set moreOpen(v) { this._moreOpen = v; }
 
   // ---------- popovers ----------
 
@@ -417,6 +485,19 @@ export class UI {
       item(I.github, 'GitHub', '', () => openExternal(REPO_URL)),
       item(I.trash, 'Xoá toàn bộ mặt giấy…', '', () => this.confirm('Xoá toàn bộ mặt giấy?', 'Có thể hoàn tác bằng Ctrl+Z.', 'Xoá hết', () => app.clearCanvas()), 'danger'),
     ), 300);
+  }
+
+  toggleShapes(anchor) {
+    const app = this.app;
+    const tiles = BASIC_SHAPES.filter((id) => SHAPES.has(id)).map((id) => {
+      const n = SHAPES.get(id).n;
+      return h('button', {
+        class: 'tile' + (app.state.shapeId === id && app.state.tool === 'shape' ? ' on' : ''), title: n, 'aria-label': n,
+        onclick: () => { app.setTool('shape', { shapeId: id }); this.closePopover(); },
+      }, shapeIcon(id, 24, app.state.shapeParams), h('span', null, n));
+    });
+    this.openPopover('shapes', anchor, [h('h3', null, 'Hình cơ bản'), h('div', { class: 'tiles' }, tiles),
+      h('p', { class: 'muted', style: { margin: '8px 2px 0', fontSize: '11px' } }, 'Kéo trên mặt giấy để vẽ. Bấm đúp vào hình để gõ chữ, Tab để nối thành sơ đồ.')], 300);
   }
 
   toggleLines(anchor) {
@@ -488,14 +569,14 @@ export class UI {
 
   openHelp() {
     const rows = [
-      ['Chọn', '1 / V'], ['Kéo mặt giấy', 'H hoặc giữ Space'], ['Nét', '3'], ['Bút', '4 / P'], ['Bút dạ quang', 'Shift+P'],
+      ['Chọn', '1 / V'], ['Kéo mặt giấy', 'H hoặc giữ Space'], ['Hình cơ bản', '2'], ['Nét', '3'], ['Bút', '4 / P'], ['Bút dạ quang', 'Shift+P'],
       ['Chữ', '5 / T'], ['Ký hiệu', '7'], ['Chèn ảnh', '8'], ['Chèn PDF', '9'], ['Tẩy', '0 / E'], ['Laser', 'K'],
       ['Giữ công cụ', 'Q'], ['Hoàn tác / Làm lại', 'Ctrl+Z / Ctrl+Y'], ['Nhân bản', 'Ctrl+D'], ['Chọn tất cả', 'Ctrl+A'], ['Xoá', 'Delete'],
       ['Sao chép / Dán', 'Ctrl+C / Ctrl+V'], ['Lưu / Mở', 'Ctrl+S / Ctrl+O'], ['Xuất PNG', 'Ctrl+Shift+E'], ['Phóng to / nhỏ', 'Ctrl+= / Ctrl+-, Ctrl+lăn chuột'],
       ['Về 100%', 'Ctrl+0'], ['Vừa nội dung', 'Shift+1'], ['Đưa lên / xuống', 'Ctrl+] / Ctrl+['], ['Giữ tỉ lệ / khoá góc', 'Shift'], ['Tắt bắt điểm tạm thời', 'Alt'],
       ['Kết thúc nét nhiều điểm', 'Enter / bấm đúp'], ['Đổi cỡ tẩy', '[ / ]'],
-      ['Sơ đồ tư duy', 'N'], ['Nhánh con (đang chọn chủ đề)', 'Tab'], ['Nhánh ngang hàng', 'Space / Enter'],
-      ['Sửa chữ trong hình', 'F2 / bấm đúp'], ['Xuất PDF', 'Ctrl+P'],
+      ['Sơ đồ tư duy', 'N'], ['Nhánh con (đang chọn chủ đề)', 'Tab'], ['Nhánh ngang hàng', 'Enter / Space'],
+      ['Sửa chữ trong hình', 'gõ luôn / F2 / bấm đúp'], ['Chữ thường thành sơ đồ', 'Tab'], ['Đổi nhánh', 'kéo thả lên chủ đề khác'], ['Xoá nhánh', 'Delete'], ['Xuất PDF', 'Ctrl+P'],
     ];
     this.openDialog('Phím tắt', h('div', { class: 'shortcuts' }, rows.map(([a, b]) => h('div', null, h('span', null, a), h('kbd', null, b)))));
   }
@@ -574,7 +655,7 @@ function range(min, max, step, value, onChange) {
 
 function colorInput(value, onChange) {
   const v = /^#[0-9a-f]{6}$/i.test(value) ? value : '#000000';
-  return h('input', { type: 'color', value: v, 'aria-label': 'Chọn màu khác', title: 'Màu khác', style: { width: '26px', height: '26px', padding: '0', border: '1px solid #dadada', borderRadius: '6px', background: 'none' }, onchange: (e) => onChange(e.target.value) });
+  return h('input', { type: 'color', value: v, 'aria-label': 'Chọn màu khác', title: 'Màu khác', style: { width: '20px', height: '20px', padding: '0', border: '1px solid #dadada', borderRadius: '6px', background: 'none' }, onchange: (e) => onChange(e.target.value) });
 }
 
 export { SHAPES };

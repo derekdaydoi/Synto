@@ -3,7 +3,7 @@
 import rough from '../vendor/roughjs/rough.esm.js';
 import { getStroke } from '../vendor/perfect-freehand/index.mjs';
 import {
-  FONT_FAMILY, LINE_HEIGHT, PDF, getBounds, localGeometry, linePathD, linePolyline, pdfLayout, pdfCurrentPage, headSize, labelColor,
+  FONT_FAMILY, LINE_HEIGHT, PDF, getBounds, localGeometry, linePathD, linePolyline, pdfLayout, pdfCurrentPage, headSize, labelColor, labelCenterY,
 } from './elements.js';
 import { pathToString } from './svgpath.js';
 import { boundsIntersect } from './geometry.js';
@@ -181,7 +181,7 @@ function drawLabel(ctx, el) {
   ctx.textAlign = 'center';
   const lh = el.fontSize * LINE_HEIGHT;
   const lines = el.label.split('\n');
-  const top = el.h / 2 - (lines.length * lh) / 2 + (lh - el.fontSize) / 2;
+  const top = labelCenterY(el) - (lines.length * lh) / 2 + (lh - el.fontSize) / 2;
   lines.forEach((line, i) => ctx.fillText(line, el.w / 2, top + i * lh));
 }
 
@@ -326,6 +326,23 @@ export class Renderer {
     if (view.eraserCursor) this.drawEraserCursor(view.eraserCursor.p, view.eraserCursor.r);
     if (view.laserDot) this.drawLaserDot(view.laserDot, 1);
     if (view.snap) this.drawSnap(S(view.snap.point), view.snap.label);
+    if (view.dropTarget) this.drawDropTarget(view.dropTarget, S);
+  }
+
+  /** Mind map: the topic a dragged branch will attach to on release. */
+  drawDropTarget(el, S) {
+    const { ctx } = this;
+    const b = getBounds(el);
+    const a = S([b.minX, b.minY]), c = S([b.maxX, b.maxY]);
+    ctx.save();
+    ctx.fillStyle = 'rgba(47,107,255,0.10)';
+    ctx.strokeStyle = SELECTION_COLOR;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    roundRect(ctx, a[0] - 6, a[1] - 6, c[0] - a[0] + 12, c[1] - a[1] + 12, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
